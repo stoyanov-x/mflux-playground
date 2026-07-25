@@ -48,10 +48,6 @@ app.include_router(generate.router)
 
 @app.get("/health", response_model=HealthResponse)
 async def health():
-    from app.services.job_worker import get_worker
-
-    worker = get_worker()
-    engine = worker._engine
     return HealthResponse(
         status="ok",
         model_alias=settings.model_alias,

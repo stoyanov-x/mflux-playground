@@ -13,9 +13,9 @@ import threading
 
 import structlog
 
+from app.inference import InferenceEngine
 from app.models import JobStatus
 from app.services.job_store import JobStore, get_job_store
-from app.inference import InferenceEngine
 
 logger = structlog.get_logger(__name__)
 
