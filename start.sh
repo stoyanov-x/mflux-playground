@@ -63,7 +63,8 @@ fi
 
 info "Installing inference service dependencies…"
 cd "$SCRIPT_DIR/inference-service"
-uv sync --frozen 2>/dev/null || uv sync
+uv venv 2>/dev/null || true   # create .venv if not present
+uv pip install -r requirements.txt
 ok "Python dependencies installed."
 
 cd "$SCRIPT_DIR"
