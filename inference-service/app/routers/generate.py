@@ -92,14 +92,16 @@ async def delete_job(
 async def cancel_job(
     job_id: str,
     store: JobStore = Depends(get_job_store),
+    worker=Depends(get_worker),
 ) -> dict:
-    """Cancel a queued or running job."""
+    """Cancel a queued or running job. Interrupts mid-generation via callback."""
     job = await asyncio.to_thread(store.get_job, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
     if job["status"] in ("completed", "failed", "cancelled"):
         raise HTTPException(status_code=400, detail=f"Job already {job['status']}")
     await asyncio.to_thread(store.update_job, job_id, status="cancelled")
+    worker._engine.cancel()
     return {"status": "cancelled"}
 
 

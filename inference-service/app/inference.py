@@ -14,6 +14,7 @@ from __future__ import annotations
 import base64
 import io
 import tempfile
+import threading
 import time
 from pathlib import Path
 from typing import Optional
@@ -108,6 +109,7 @@ class InferenceEngine:
         self._model_alias = settings.model_alias
         self._quantize = settings.quantize
         self._loaded_lora_paths: tuple[str, ...] = ()
+        self._cancel_event = threading.Event()
 
         # Apply resource limits once at init
         self._apply_resource_limits()
@@ -117,6 +119,11 @@ class InferenceEngine:
             model=self._model_alias,
             quantize=self._quantize,
         )
+
+    def cancel(self) -> None:
+        """Signal the current generation to stop at the next diffusion step."""
+        self._cancel_event.set()
+        logger.info("cancel_signalled")
 
     @staticmethod
     def _apply_resource_limits() -> None:
@@ -167,8 +174,25 @@ class InferenceEngine:
             quantize=self._quantize,
             lora_paths=list(lora_tuple) if lora_tuple else None,
         )
+        # Register per-step cancel callback
+        self._register_cancel_callback()
         self._loaded_lora_paths = lora_tuple
         logger.info("model_loaded", loras=self._loaded_lora_paths)
+
+    def _register_cancel_callback(self) -> None:
+        """Register an in-loop callback that stops generation when cancel() is called."""
+
+        class _CancelChecker:
+            def __init__(self, event: threading.Event):
+                self._event = event
+
+            def call_in_loop(self, t: int, **kwargs) -> None:
+                if self._event.is_set():
+                    from mflux.utils.exceptions import StopImageGenerationException
+                    raise StopImageGenerationException("Cancelled by user")
+
+        self._cancel_event.clear()
+        self._model.callbacks.register(_CancelChecker(self._cancel_event))
 
     def unload_model(self) -> None:
         self._model = None
@@ -199,6 +223,9 @@ class InferenceEngine:
         -------
         (image, seed_used, elapsed_seconds)
         """
+        # Reset cancel so a previous cancellation doesn't leak through
+        self._cancel_event.clear()
+
         self.load_model(lora_paths=lora_paths)
 
         steps = num_inference_steps or settings.default_num_steps

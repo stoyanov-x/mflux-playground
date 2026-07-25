@@ -16,6 +16,7 @@ import structlog
 from app.inference import InferenceEngine
 from app.models import JobStatus
 from app.services.job_store import JobStore, get_job_store
+from mflux.utils.exceptions import StopImageGenerationException
 
 logger = structlog.get_logger(__name__)
 
@@ -77,6 +78,12 @@ class JobWorker:
             else:
                 self._run_generation(job_id, req)
 
+        except StopImageGenerationException:
+            logger.info("job_cancelled", job_id=job_id)
+            self._store.update_job(
+                job_id,
+                status=JobStatus.cancelled.value,
+            )
         except Exception as exc:
             logger.error("job_failed", job_id=job_id, error=str(exc))
             self._store.update_job(
