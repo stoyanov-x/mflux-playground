@@ -13,9 +13,8 @@ To port to a cloud target (Replicate / Fal.ai / RunPod) you'd:
 
 from __future__ import annotations
 
-import io
 import base64
-import logging
+import io
 import time
 from typing import Optional
 
@@ -35,9 +34,7 @@ class InferenceEngine:
         self._model_alias = settings.model_alias
         self._quantize = settings.quantize
         self._default_lora_paths = [
-            p.strip()
-            for p in settings.lora_paths.split(",")
-            if p.strip()
+            p.strip() for p in settings.lora_paths.split(",") if p.strip()
         ]
         logger.info(
             "inference_init",

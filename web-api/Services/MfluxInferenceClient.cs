@@ -1,5 +1,4 @@
 using System.Net.Http.Json;
-using System.Text.Json.Serialization;
 using MfluxExperiment.WebApi.Models;
 
 namespace MfluxExperiment.WebApi.Services;
