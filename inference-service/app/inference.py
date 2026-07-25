@@ -136,19 +136,27 @@ class InferenceEngine:
         except Exception:
             pass
 
+        limit_gb = settings.mlx_cache_limit_gb or 8.0
+
+        # Hard cap on total MLX memory (not just cache). Prevents OOM kernel panics.
+        try:
+            mx.set_memory_limit(int(limit_gb * 1024 * 1024 * 1024))
+            logger.info("mlx_memory_limit_set", gb=limit_gb)
+        except Exception as exc:
+            logger.warning("mlx_memory_limit_failed", error=str(exc))
+
         # Limit MLX GPU memory cache
-        if settings.mlx_cache_limit_gb is not None:
-            try:
-                mx.set_cache_limit(int(settings.mlx_cache_limit_gb * 1024 * 1024 * 1024))
-                logger.info("mlx_cache_limit_set", gb=settings.mlx_cache_limit_gb)
-            except Exception as exc:
-                logger.warning("mlx_cache_limit_failed", error=str(exc))
+        try:
+            mx.set_cache_limit(int(limit_gb * 1024 * 1024 * 1024))
+            logger.info("mlx_cache_limit_set", gb=limit_gb)
+        except Exception as exc:
+            logger.warning("mlx_cache_limit_failed", error=str(exc))
 
         # Set wired memory limit as well (prevents system pressure)
         try:
-            # Use 75% of cache limit as wired limit, or 12GB default
-            wired = (settings.mlx_cache_limit_gb or 16.0) * 0.75 * 1024 * 1024 * 1024
-            mx.set_wired_limit(int(wired))
+            # Use 75% of cache limit as wired limit
+            wired = int(limit_gb * 0.75 * 1024 * 1024 * 1024)
+            mx.set_wired_limit(wired)
         except Exception:
             pass
 
