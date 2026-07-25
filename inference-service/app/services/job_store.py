@@ -106,14 +106,16 @@ class JobStore:
         values = [*fields.values(), job_id]
         with self._connect() as conn:
             conn.execute(
-                f"UPDATE jobs SET {set_clause} WHERE job_id = ?", values,
+                f"UPDATE jobs SET {set_clause} WHERE job_id = ?",
+                values,
             )
 
     def get_params(self, job_id: str) -> Optional[dict]:
         """Retrieve the original request params stored at creation."""
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT params_json FROM jobs WHERE job_id = ?", (job_id,),
+                "SELECT params_json FROM jobs WHERE job_id = ?",
+                (job_id,),
             ).fetchone()
             if row and row["params_json"]:
                 return json.loads(row["params_json"])
@@ -140,7 +142,8 @@ class JobStore:
     def get_image(self, job_id: str) -> Optional[bytes]:
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT data FROM images WHERE job_id = ?", (job_id,),
+                "SELECT data FROM images WHERE job_id = ?",
+                (job_id,),
             ).fetchone()
             return row["data"] if row else None
 
