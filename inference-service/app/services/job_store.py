@@ -1,7 +1,7 @@
-"""SQLite-backed job store.
+"""SQLite-backed job store + disk-backed images.
 
-Persists jobs and generated images so they survive service restarts.
-Swap for Postgres / Redis when scaling to multi-worker deployments.
+Jobs metadata lives in SQLite; generated images are saved as PNG files
+on disk with a path reference in the database.
 """
 
 from __future__ import annotations
@@ -16,14 +16,11 @@ from app.models import JobStatus
 
 # Database file lives alongside the app package (gitignored).
 _DEFAULT_DB_DIR = Path(__file__).parent.parent.parent / "data"
+_IMAGES_DIR = Path(__file__).parent.parent.parent / "generated_images"
 
 
 class JobStore:
-    """SQLite-persisted store for generation jobs.
-
-    Creates tables on init. Thread-safe via per-call connections
-    with WAL mode and busy timeout for concurrency.
-    """
+    """SQLite-persisted store for generation jobs + disk-backed images."""
 
     def __init__(self, db_path: str | None = None) -> None:
         if db_path is None:
@@ -31,8 +28,8 @@ class JobStore:
             db_dir.mkdir(parents=True, exist_ok=True)
             db_path = str(db_dir / "mflux_jobs.db")
         self._db_path = db_path
+        _IMAGES_DIR.mkdir(parents=True, exist_ok=True)
         self._init_db()
-        # Cap for images (oldest removed when exceeded)
         self._max_images = settings.max_completed_jobs
 
     # ── Connection helpers ───────────────────────────────────
@@ -60,15 +57,17 @@ class JobStore:
                     created_at    TEXT NOT NULL DEFAULT (datetime('now'))
                 );
 
-                CREATE TABLE IF NOT EXISTS images (
-                    job_id  TEXT PRIMARY KEY,
-                    data    BLOB NOT NULL,
-                    FOREIGN KEY (job_id) REFERENCES jobs(job_id)
-                );
-
                 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
                 CREATE INDEX IF NOT EXISTS idx_jobs_created ON jobs(created_at DESC);
+
+                -- Migration: drop old BLOB table if upgrading from earlier schema
+                DROP TABLE IF EXISTS images;
             """)
+            # Migration: add image_path column if missing (idempotent)
+            try:
+                conn.execute("ALTER TABLE jobs ADD COLUMN image_path TEXT")
+            except sqlite3.OperationalError:
+                pass  # column already exists
 
     # ── CRUD ─────────────────────────────────────────────────
 
@@ -78,6 +77,7 @@ class JobStore:
             "status": JobStatus.queued.value,
             "progress": 0.0,
             "result_url": None,
+            "image_path": None,
             "error": None,
             "seed_used": None,
             "elapsed_seconds": None,
@@ -92,7 +92,7 @@ class JobStore:
     def get_job(self, job_id: str) -> Optional[dict]:
         with self._connect() as conn:
             row = conn.execute(
-                """SELECT job_id, status, progress, result_url, error,
+                """SELECT job_id, status, progress, result_url, image_path, error,
                           seed_used, elapsed_seconds
                    FROM jobs WHERE job_id = ?""",
                 (job_id,),
@@ -121,31 +121,25 @@ class JobStore:
                 return json.loads(row["params_json"])
             return None
 
-    # ── Image BLOBs ──────────────────────────────────────────
+    # ── Disk-backed images ───────────────────────────────────
 
-    def set_image(self, job_id: str, image_bytes: bytes) -> None:
-        with self._connect() as conn:
-            conn.execute(
-                "INSERT OR REPLACE INTO images (job_id, data) VALUES (?, ?)",
-                (job_id, image_bytes),
-            )
-            # Enforce cap — remove oldest image rows beyond limit.
-            conn.execute(
-                """DELETE FROM images WHERE job_id IN (
-                       SELECT job_id FROM images
-                       ORDER BY job_id ASC
-                       LIMIT MAX(0, (SELECT COUNT(*) FROM images) - ?)
-                   )""",
-                (self._max_images,),
-            )
+    def set_image(self, job_id: str, image_bytes: bytes) -> str:
+        """Save image bytes to disk and return the file path."""
+        image_path = _IMAGES_DIR / f"{job_id}.png"
+        image_path.write_bytes(image_bytes)
+        return str(image_path)
 
-    def get_image(self, job_id: str) -> Optional[bytes]:
+    def get_image_path(self, job_id: str) -> Optional[str]:
+        """Return the on-disk path for a completed job's image, or None."""
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT data FROM images WHERE job_id = ?",
+                "SELECT image_path FROM jobs WHERE job_id = ?",
                 (job_id,),
             ).fetchone()
-            return row["data"] if row else None
+            path = row["image_path"] if row else None
+            if path and Path(path).exists():
+                return path
+            return None
 
 
 # ── Dependency ──────────────────────────────────────────────

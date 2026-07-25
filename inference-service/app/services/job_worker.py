@@ -107,12 +107,26 @@ class JobWorker:
             guidance_scale=req.get("guidance_scale", 3.5),
         )
 
+        # Save to disk and store path in DB
         buf = io.BytesIO()
         image.save(buf, format="PNG")
         image_bytes = buf.getvalue()
 
-        self._store.set_image(job_id, image_bytes)
+        image_path = self._store.set_image(job_id, image_bytes)
         result_url = f"/api/v1/jobs/{job_id}/image"
+
+        self._store.update_job(
+            job_id,
+            status=JobStatus.completed.value,
+            progress=1.0,
+            result_url=result_url,
+            image_path=image_path,
+            seed_used=seed,
+            elapsed_seconds=round(elapsed, 2),
+        )
+        logger.info(
+            "job_completed", job_id=job_id, path=image_path, elapsed=f"{elapsed:.2f}s"
+        )
 
         self._store.update_job(
             job_id,

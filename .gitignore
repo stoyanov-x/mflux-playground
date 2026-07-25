@@ -25,6 +25,7 @@ dist/
 # mflux
 lora_weights/*.safetensors
 generated_images/
+**/generated_images/
 
 # SQLite databases (created at runtime)
 data/

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 from starlette.responses import Response
@@ -61,10 +62,10 @@ async def get_job_image(
         raise HTTPException(status_code=404, detail="Job not found")
     if job["status"] != JobStatus.completed.value:
         raise HTTPException(status_code=400, detail="Job not yet completed")
-    image_bytes = await asyncio.to_thread(store.get_image, job_id)
-    if image_bytes is None:
+    image_path = await asyncio.to_thread(store.get_image_path, job_id)
+    if image_path is None:
         raise HTTPException(status_code=404, detail="Image not found")
-    return Response(content=image_bytes, media_type="image/png")
+    return Response(content=Path(image_path).read_bytes(), media_type="image/png")
 
 
 # ═══════════════════════════════════════════════════════════════
