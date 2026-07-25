@@ -12,6 +12,9 @@ import io
 import threading
 
 import structlog
+
+from app.config import settings
+from app.inference import InferenceEngine
 from mflux.utils.exceptions import StopImageGenerationException
 
 from app.inference import InferenceEngine
@@ -163,7 +166,7 @@ class JobWorker:
             steps=req.get("steps"),
             num_epochs=req.get("num_epochs"),
             learning_rate=req.get("learning_rate"),
-            max_resolution=req.get("max_resolution", 1024),
+            max_resolution=req.get("max_resolution", settings.training_max_resolution),
         )
 
         self._store.update_job(

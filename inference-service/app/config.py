@@ -42,9 +42,9 @@ class InferenceSettings(BaseSettings):
 
     # ── Resource limits (prevents Mac from freezing) ─────────
     # Limit MLX GPU memory cache in GB (e.g. 8, 16). None = unlimited.
-    mlx_cache_limit_gb: Optional[float] = 16.0
-    # Low RAM mode: offloads data to disk during training.
-    low_ram: bool = False
+    mlx_cache_limit_gb: Optional[float] = 8.0
+    # Low RAM mode: offloads training data to disk (saves ~10 GB at 1024px).
+    low_ram: bool = True
     # CPU nice value (higher = lower priority, 0=normal, 10=low, 19=idle).
     nice_level: int = 10
 
@@ -53,12 +53,15 @@ class InferenceSettings(BaseSettings):
     training_steps: int = 9
     training_epochs: int = 50
     training_learning_rate: float = 1e-4
+    # Max image resolution for training (lower = less memory). 1024 works on
+    # 64GB+ machines; use 768 for 48GB machines like M3 Max.
+    training_max_resolution: int = 768
 
     # ── Body size ────────────────────────────────────────────
     # Max request body in MB (training uploads can be ~150 MB)
     max_request_body_size_mb: int = 500
 
-    model_config = {"env_prefix": "MFLUX_"}
+    model_config = {"env_prefix": "MFLUX_", "env_file": ".env"}
 
 
 settings = InferenceSettings()
