@@ -44,9 +44,7 @@ def is_training_capable(model_alias: str) -> bool:
     return model_alias in TRAINING_CAPABLE_MODELS
 
 
-def _load_model_instance(
-    model_alias: str, quantize: int | None, lora_paths: list[str] | None
-):
+def _load_model_instance(model_alias: str, quantize: int | None, lora_paths: list[str] | None):
     """Dynamically import and construct the right model class for the given alias."""
     from mflux.models.common.config import ModelConfig
 

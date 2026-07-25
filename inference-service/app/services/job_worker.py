@@ -140,9 +140,7 @@ class JobWorker:
             seed_used=seed,
             elapsed_seconds=round(elapsed, 2),
         )
-        logger.info(
-            "job_completed", job_id=job_id, path=image_path, elapsed=f"{elapsed:.2f}s"
-        )
+        logger.info("job_completed", job_id=job_id, path=image_path, elapsed=f"{elapsed:.2f}s")
 
         self._store.update_job(
             job_id,
