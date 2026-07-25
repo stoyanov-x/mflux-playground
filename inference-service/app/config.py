@@ -18,7 +18,7 @@ class InferenceSettings(BaseSettings):
     log_level: str = "info"
 
     # ── Model defaults ───────────────────────────────────────
-    model_alias: str = "dev"               # "dev" | "schnell"
+    model_alias: str = "schnell"             # "dev" | "schnell"
     default_num_steps: int = 25
     default_height: int = 1024
     default_width: int = 1024
