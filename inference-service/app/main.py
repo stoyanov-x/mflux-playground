@@ -72,6 +72,5 @@ if __name__ == "__main__":
         port=settings.port,
         log_level=settings.log_level,
         reload=True,
-        limit_max_request_body_size=500 * 1024 * 1024,  # 500 MB for training uploads
-    )
+        limit_max_request_body_size=settings.max_request_body_size_mb * 1024 * 1024,
     )

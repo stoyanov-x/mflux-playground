@@ -54,6 +54,10 @@ class InferenceSettings(BaseSettings):
     training_epochs: int = 50
     training_learning_rate: float = 1e-4
 
+    # ── Body size ────────────────────────────────────────────
+    # Max request body in MB (training uploads can be ~150 MB)
+    max_request_body_size_mb: int = 500
+
     model_config = {"env_prefix": "MFLUX_"}
 
 
