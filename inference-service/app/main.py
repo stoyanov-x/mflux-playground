@@ -54,11 +54,13 @@ app.include_router(generate.router)
 @app.on_event("startup")
 async def preload_model():
     """Pre-load the model in the background so download progress is visible."""
+
     async def _background_load():
         logger.info("Pre-loading model in background (download will show below)…")
 
         def _load():
             from app.services.job_worker import get_worker
+
             worker = get_worker()
             worker._engine.load_model()
             logger.info("Model pre-loaded successfully.")
