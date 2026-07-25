@@ -296,7 +296,7 @@ function TrainTab() {
   const [name, setName] = useState('')
   const [files, setFiles] = useState<File[]>([])
   const [previews, setPreviews] = useState<string[]>([])
-  const [promptsText, setPromptsText] = useState('')
+  const [imagePrompts, setImagePrompts] = useState<string[]>([])
   const [epochs, setEpochs] = useState(50)
   const [steps, setSteps] = useState(9)
   const [training, setTraining] = useState(false)
@@ -310,6 +310,7 @@ function TrainTab() {
     if (!newFiles) return
     const incoming = Array.from(newFiles)
     setFiles(prev => [...prev, ...incoming])
+    setImagePrompts(prev => [...prev, ...incoming.map(() => '')])
     for (const f of incoming) {
       setPreviews(prev => [...prev, URL.createObjectURL(f)])
     }
@@ -318,6 +319,7 @@ function TrainTab() {
   const removeFile = (idx: number) => {
     setFiles(prev => prev.filter((_, i) => i !== idx))
     setPreviews(prev => prev.filter((_, i) => i !== idx))
+    setImagePrompts(prev => prev.filter((_, i) => i !== idx))
   }
 
   const startTraining = async () => {
@@ -331,12 +333,10 @@ function TrainTab() {
       setStatus('Submitting training job…')
 
       const body: Record<string, unknown> = { name: name.trim(), images: images_b64, num_epochs: epochs, steps }
-      // Parse comma-separated prompts if provided
-      if (promptsText.trim()) {
-        const prompts = promptsText.split(',').map(s => s.trim()).filter(Boolean)
-        if (prompts.length === files.length) {
-          body.prompts = prompts
-        }
+      // Send per-image prompts — only if at least one is non-empty
+      const filledPrompts = imagePrompts.map(s => s.trim()).filter(Boolean)
+      if (filledPrompts.length > 0) {
+        body.prompts = imagePrompts.map(s => s.trim())
       }
 
       const res = await fetch(`${INFERENCE_API}/train`, {
@@ -412,13 +412,24 @@ function TrainTab() {
           />
         </div>
         {previews.length > 0 && (
-          <div className="flex flex-wrap gap-2 mt-3">
+          <div className="space-y-2 mt-3">
             {previews.map((url, i) => (
-              <div key={i} className="relative group">
-                <img src={url} className="h-20 w-20 object-cover rounded-lg border border-gray-700" />
+              <div key={i} className="flex items-center gap-3 bg-gray-900 rounded-lg p-2">
+                <img src={url} className="h-14 w-14 object-cover rounded border border-gray-700 shrink-0" />
+                <input
+                  className="flex-1 bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={imagePrompts[i] ?? ''}
+                  onChange={e => {
+                    const next = [...imagePrompts]
+                    next[i] = e.target.value
+                    setImagePrompts(next)
+                  }}
+                  placeholder={`Describe image ${i + 1} (optional)`}
+                  disabled={training}
+                />
                 {!training && (
                   <button onClick={() => removeFile(i)}
-                    className="absolute -top-1.5 -right-1.5 bg-red-600 text-white text-xs rounded-full w-5 h-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="text-red-400 hover:text-red-300 text-xs shrink-0 px-2"
                   >×</button>
                 )}
               </div>
@@ -426,22 +437,9 @@ function TrainTab() {
           </div>
         )}
       </div>
-
-      {/* Image captions (optional but recommended for better results) */}
-      <div>
-        <label className="block text-sm font-medium text-gray-300 mb-1">
-          Image prompts <span className="text-gray-500 font-normal">(optional — one per image, comma-separated)</span>
-        </label>
-        <textarea
-          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none text-sm"
-          rows={2} value={promptsText} onChange={e => setPromptsText(e.target.value)}
-          placeholder="a portrait in this style, a landscape in this style, ..."
-          disabled={training}
-        />
-        <p className="text-xs text-gray-500 mt-1">
-          Describing each image helps the model learn faster. Leave blank for style-only training.
-        </p>
-      </div>
+      <p className="text-xs text-gray-500 -mt-3">
+        Captions help the model learn faster. Leave blank for style-only training.
+      </p>
 
       <div className="flex gap-4">
         <div className="w-24">
