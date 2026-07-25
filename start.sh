@@ -129,29 +129,21 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level info &
 INFERENCE_PID=$!
 cd "$SCRIPT_DIR"
 
-# Wait for inference to be ready (may need to download model on first run)
-info "Waiting for inference service to be ready (may download ~6GB model on first run)…"
+# Wait for inference to be ready (just checks server is up; model loads lazily)
+info "Waiting for inference service to start…"
 _attempt=0
-while true; do
-    _health=$(curl -sf http://localhost:8000/health 2>/dev/null)
-    if echo "$_health" | grep -q '"ok"'; then
-        ok "Inference service is ready."
-        break
-    fi
-    if echo "$_health" | grep -q '"loading"'; then
-        # Still downloading — show a progress pulse every 10s
-        if [[ $((_attempt % 10)) -eq 0 ]]; then
-            info "Still downloading model... ($_attempt seconds elapsed)"
-        fi
-    fi
+while ! curl -sf http://localhost:8000/health > /dev/null 2>&1; do
     _attempt=$((_attempt + 1))
-    if [[ $_attempt -ge 300 ]]; then  # 5 minute timeout
-        warn "Inference service not ready after 5 minutes."
-        warn "Check logs with: docker compose logs inference-service"
+    if [[ $_attempt -ge 60 ]]; then  # 1 minute timeout for server start
+        warn "Inference service not responding after 60 seconds."
+        warn "Check the terminal output above for errors."
         break
     fi
     sleep 1
 done
+if curl -sf http://localhost:8000/health > /dev/null 2>&1; then
+    ok "Inference service is ready."
+fi
 
 # ── Print summary ───────────────────────────────────────────
 
@@ -164,6 +156,8 @@ echo -e "  ${CYAN}Frontend:${NC}          http://localhost:5173"
 echo -e "  ${CYAN}Web API:${NC}           http://localhost:5100"
 echo -e "  ${CYAN}Inference API:${NC}     http://localhost:8000"
 echo -e "  ${CYAN}Inference docs:${NC}    http://localhost:8000/docs"
+echo ""
+echo -e "  ${YELLOW}Note: model downloads on first generation — watch the uvicorn terminal.${NC}"
 echo ""
 echo -e "  ${YELLOW}Press Ctrl+C to stop everything.${NC}"
 echo ""
