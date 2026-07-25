@@ -349,7 +349,7 @@ function TrainTab() {
       const res = await fetch(`${INFERENCE_API}/train`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), images: images_b64, num_epochs: epochs, steps }),
+        body: JSON.stringify(body),
       })
       const data = await res.json()
       setJobId(data.job_id)
