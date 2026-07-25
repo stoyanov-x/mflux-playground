@@ -27,43 +27,47 @@ TRAINING_DIR = Path(settings.training_dir).resolve()
 TRAINING_DIR.mkdir(parents=True, exist_ok=True)
 
 # Default training config template (FLUX.2 Klein / Z-Image compatible)
-DEFAULT_LORA_TARGETS = [
-    {
-        "module_path": "layers.{block}.attention.to_q",
-        "blocks": {"start": 0, "end": 18},
-        "rank": 16,
-    },
-    {
-        "module_path": "layers.{block}.attention.to_k",
-        "blocks": {"start": 0, "end": 18},
-        "rank": 16,
-    },
-    {
-        "module_path": "layers.{block}.attention.to_v",
-        "blocks": {"start": 0, "end": 18},
-        "rank": 16,
-    },
-    {
-        "module_path": "layers.{block}.attention.to_out.0",
-        "blocks": {"start": 0, "end": 18},
-        "rank": 16,
-    },
-    {
-        "module_path": "layers.{block}.feed_forward.w1",
-        "blocks": {"start": 0, "end": 18},
-        "rank": 16,
-    },
-    {
-        "module_path": "layers.{block}.feed_forward.w2",
-        "blocks": {"start": 0, "end": 18},
-        "rank": 16,
-    },
-    {
-        "module_path": "layers.{block}.feed_forward.w3",
-        "blocks": {"start": 0, "end": 18},
-        "rank": 16,
-    },
+# ── LoRA target paths per model family ──────────────────────
+# FLUX.2 uses transformer_blocks + single_transformer_blocks
+LORA_TARGETS_FLUX2 = [
+    {"module_path": "transformer_blocks.{block}.attn.to_q", "blocks": {"start": 0, "end": 5}, "rank": 16},
+    {"module_path": "transformer_blocks.{block}.attn.to_k", "blocks": {"start": 0, "end": 5}, "rank": 16},
+    {"module_path": "transformer_blocks.{block}.attn.to_v", "blocks": {"start": 0, "end": 5}, "rank": 16},
+    {"module_path": "transformer_blocks.{block}.attn.to_out", "blocks": {"start": 0, "end": 5}, "rank": 16},
+    {"module_path": "transformer_blocks.{block}.attn.add_q_proj", "blocks": {"start": 0, "end": 5}, "rank": 16},
+    {"module_path": "transformer_blocks.{block}.attn.add_k_proj", "blocks": {"start": 0, "end": 5}, "rank": 16},
+    {"module_path": "transformer_blocks.{block}.attn.add_v_proj", "blocks": {"start": 0, "end": 5}, "rank": 16},
+    {"module_path": "transformer_blocks.{block}.attn.to_add_out", "blocks": {"start": 0, "end": 5}, "rank": 16},
+    {"module_path": "transformer_blocks.{block}.ff.linear_in", "blocks": {"start": 0, "end": 5}, "rank": 16},
+    {"module_path": "transformer_blocks.{block}.ff.linear_out", "blocks": {"start": 0, "end": 5}, "rank": 16},
+    {"module_path": "transformer_blocks.{block}.ff_context.linear_in", "blocks": {"start": 0, "end": 5}, "rank": 16},
+    {"module_path": "transformer_blocks.{block}.ff_context.linear_out", "blocks": {"start": 0, "end": 5}, "rank": 16},
+    {"module_path": "single_transformer_blocks.{block}.attn.to_qkv_mlp_proj", "blocks": {"start": 0, "end": 20}, "rank": 16},
+    {"module_path": "single_transformer_blocks.{block}.attn.to_out", "blocks": {"start": 0, "end": 20}, "rank": 16},
 ]
+
+# Z-Image uses layers.{block}.attention.*
+LORA_TARGETS_ZIMAGE = [
+    {"module_path": "layers.{block}.attention.to_q", "blocks": {"start": 0, "end": 30}, "rank": 16},
+    {"module_path": "layers.{block}.attention.to_k", "blocks": {"start": 0, "end": 30}, "rank": 16},
+    {"module_path": "layers.{block}.attention.to_v", "blocks": {"start": 0, "end": 30}, "rank": 16},
+    {"module_path": "layers.{block}.attention.to_out.0", "blocks": {"start": 0, "end": 30}, "rank": 16},
+    {"module_path": "layers.{block}.feed_forward.w1", "blocks": {"start": 0, "end": 30}, "rank": 16},
+    {"module_path": "layers.{block}.feed_forward.w2", "blocks": {"start": 0, "end": 30}, "rank": 16},
+    {"module_path": "layers.{block}.feed_forward.w3", "blocks": {"start": 0, "end": 30}, "rank": 16},
+    {"module_path": "cap_embedder.1", "rank": 16},
+    {"module_path": "all_final_layer.2-1.linear", "rank": 16},
+]
+
+
+def _lora_targets_for_model(model_alias: str) -> list[dict]:
+    """Return the appropriate LoRA target paths for the given model."""
+    if model_alias.startswith("flux2"):
+        return LORA_TARGETS_FLUX2
+    if model_alias.startswith("z-image"):
+        return LORA_TARGETS_ZIMAGE
+    # Default: FLUX.2 targets (covers most models)
+    return LORA_TARGETS_FLUX2
 
 
 def build_training_config(
@@ -109,7 +113,7 @@ def build_training_config(
             "generate_image_frequency": max(1, num_epochs // 3),
         },
         "lora_layers": {
-            "targets": DEFAULT_LORA_TARGETS,
+            "targets": _lora_targets_for_model(model_alias),
         },
     }
 
