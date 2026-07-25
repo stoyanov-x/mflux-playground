@@ -1,0 +1,63 @@
+# ──────────────────────────────────────────────────────────────
+#  mflux Experiment — local dev stack
+# ──────────────────────────────────────────────────────────────
+#  The inference service (mflux + MLX) only runs on Apple Silicon
+#  and is started outside Docker for real inference.
+#  This compose file is for the supporting services locally,
+#  and documents how the cloud deployment would look.
+#
+#  Local dev workflow:
+#    Terminal 1: cd inference-service && uv run uvicorn app.main:app --reload
+#    Terminal 2: cd web-api && dotnet run
+#    Terminal 3: cd web-frontend && npm run dev
+# ──────────────────────────────────────────────────────────────
+
+services:
+  # ── Web API (ASP.NET Core) ─────────────────────────────────
+  web-api:
+    build:
+      context: ./web-api
+      dockerfile: Dockerfile
+    ports:
+      - "5100:8080"
+    environment:
+      - InferenceBaseUrl=http://inference-service:8000
+      - ASPNETCORE_ENVIRONMENT=Development
+    depends_on:
+      - inference-service
+    # In production, add Redis/Postgres here.
+
+  # ── Inference Service (FastAPI + mflux) ────────────────────
+  # NOTE: Only works on Apple Silicon hosts due to MLX dependency.
+  inference-service:
+    build:
+      context: ./inference-service
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - MFLUX_MODEL_ALIAS=dev
+      - MFLUX_DEFAULT_NUM_STEPS=25
+      - MFLUX_QUANTIZE=8
+    volumes:
+      - ./inference-service/lora_weights:/app/lora_weights
+    # On cloud GPU targets, replace this service with a CUDA-based
+    # image running diffusers or ComfyUI with the same API contract.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: cdi
+              capabilities: [gpu]
+    profiles:
+      - local-mac    # Only enabled when explicitly profiled
+
+  # ── Frontend (Vite + React) ────────────────────────────────
+  frontend:
+    build:
+      context: ./web-frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:80"
+    depends_on:
+      - web-api

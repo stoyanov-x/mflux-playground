@@ -1,0 +1,19 @@
+# Core inference
+mflux>=0.17.0
+
+# API layer
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+
+# Validation & config
+pydantic>=2.10.0
+pydantic-settings>=2.7.0
+
+# Image handling
+Pillow>=11.0.0
+
+# Async job queue support
+httpx>=0.28.0
+
+# Observability
+structlog>=24.4.0
