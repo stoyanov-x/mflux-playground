@@ -76,6 +76,33 @@ async def list_jobs(
     return await asyncio.to_thread(store.list_jobs, 50)
 
 
+@router.delete("/jobs/{job_id}")
+async def delete_job(
+    job_id: str,
+    store: JobStore = Depends(get_job_store),
+) -> dict:
+    """Delete a job and its image."""
+    deleted = await asyncio.to_thread(store.delete_job, job_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return {"deleted": True}
+
+
+@router.post("/jobs/{job_id}/cancel")
+async def cancel_job(
+    job_id: str,
+    store: JobStore = Depends(get_job_store),
+) -> dict:
+    """Cancel a queued or running job."""
+    job = await asyncio.to_thread(store.get_job, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job["status"] in ("completed", "failed", "cancelled"):
+        raise HTTPException(status_code=400, detail=f"Job already {job['status']}")
+    await asyncio.to_thread(store.update_job, job_id, status="cancelled")
+    return {"status": "cancelled"}
+
+
 # ═══════════════════════════════════════════════════════════════
 #  Training
 # ═══════════════════════════════════════════════════════════════

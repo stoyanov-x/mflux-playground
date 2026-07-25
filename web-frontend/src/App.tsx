@@ -452,25 +452,47 @@ function TrainTab() {
 
 function HistoryTab() {
   const [jobs, setJobs] = useState<Job[]>([])
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
-  useEffect(() => {
+  const fetchJobs = () => {
     fetch(`${INFERENCE_API}/jobs`)
       .then(r => r.json())
       .then(data => setJobs(data.map((j: Record<string, unknown>) => ({
-        id: j.job_id,
-        prompt: '',
-        status: j.status,
-        resultUrl: j.result_url,
-        error: j.error,
-        createdAt: j.created_at,
+        id: j.job_id as string,
+        prompt: (j.prompt as string) || '',
+        status: j.status as string,
+        resultUrl: j.result_url as string | undefined,
+        error: j.error as string | undefined,
+        createdAt: j.created_at as string,
       }))))
       .catch(() => {})
-  }, [])
+  }
+
+  useEffect(fetchJobs, [])
+
+  const cancelJob = async (id: string) => {
+    await fetch(`${INFERENCE_API}/jobs/${id}/cancel`, { method: 'POST' })
+    fetchJobs()
+  }
+
+  const deleteJob = async (id: string) => {
+    await fetch(`${INFERENCE_API}/jobs/${id}`, { method: 'DELETE' })
+    fetchJobs()
+  }
+
+  const toggleExpand = (id: string) => {
+    setExpanded(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
 
   const statusBadge = (status: string) => {
     const colors: Record<string, string> = {
       queued: 'bg-gray-500', running: 'bg-blue-500',
       completed: 'bg-green-500', failed: 'bg-red-500',
+      cancelled: 'bg-yellow-600',
     }
     return (
       <span className={`inline-block px-2 py-0.5 text-xs text-white rounded ${colors[status] || 'bg-gray-500'}`}>
@@ -480,7 +502,7 @@ function HistoryTab() {
   }
 
   if (jobs.length === 0) {
-    return <p className="text-gray-500 text-sm">No generation history yet.</p>
+    return <p className="text-gray-500 text-sm">No jobs yet.</p>
   }
 
   return (
@@ -489,16 +511,40 @@ function HistoryTab() {
         <li key={job.id} className="bg-gray-900 border border-gray-800 rounded-lg p-4">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
-              <p className="text-sm text-gray-300 truncate">{job.prompt}</p>
+              <p className="text-sm text-gray-300 truncate cursor-pointer"
+                 onClick={() => toggleExpand(job.id)} title="Click for details">
+                {job.prompt || '(no prompt)'}
+              </p>
               <p className="text-xs text-gray-500 mt-1">{new Date(job.createdAt).toLocaleString()}</p>
             </div>
-            <div className="flex items-center gap-2 shrink-0">{statusBadge(job.status)}</div>
+            <div className="flex items-center gap-2 shrink-0">
+              {statusBadge(job.status)}
+              {(job.status === 'queued' || job.status === 'running') && (
+                <button onClick={() => cancelJob(job.id)}
+                  className="text-xs bg-yellow-700 hover:bg-yellow-600 text-white px-2 py-1 rounded transition-colors">
+                  Cancel
+                </button>
+              )}
+              <button onClick={() => deleteJob(job.id)}
+                className="text-xs bg-red-800 hover:bg-red-700 text-white px-2 py-1 rounded transition-colors">
+                Delete
+              </button>
+            </div>
           </div>
-          {job.resultUrl && (
+
+          {/* Expanded details */}
+          {expanded.has(job.id) && (
+            <div className="mt-3 text-xs text-gray-400 space-y-1 border-t border-gray-800 pt-2">
+              <p><span className="text-gray-500">Job ID:</span> {job.id}</p>
+              <p><span className="text-gray-500">Prompt:</span> {job.prompt || '(none)'}</p>
+              {job.error && <p className="text-red-400"><span className="text-gray-500">Error:</span> {job.error}</p>}
+            </div>
+          )}
+
+          {job.resultUrl && job.status === 'completed' && (
             <img src={`${INFERENCE_API}/jobs/${job.id}/image?t=${Date.now()}`} alt={job.prompt}
               className="mt-3 max-w-full rounded-lg border border-gray-700 max-h-96" />
           )}
-          {job.error && <p className="text-red-400 text-sm mt-2">Error: {job.error}</p>}
         </li>
       ))}
     </ul>

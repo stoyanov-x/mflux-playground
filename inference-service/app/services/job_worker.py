@@ -60,6 +60,11 @@ class JobWorker:
         if job is None:
             return
 
+        # Check if cancelled while queued
+        if job.get("status") == "cancelled":
+            logger.info("job_cancelled_while_queued", job_id=job_id)
+            return
+
         self._store.update_job(job_id, status=JobStatus.running.value, progress=0.0)
         logger.info("job_started", job_id=job_id, type=job.get("type", "generate"))
 

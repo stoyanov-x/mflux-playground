@@ -122,15 +122,35 @@ class JobStore:
             return None
 
     def list_jobs(self, limit: int = 50) -> list[dict]:
-        """Return recent jobs, newest first."""
+        """Return recent jobs, newest first, with prompt extracted from params."""
         with self._connect() as conn:
             rows = conn.execute(
                 """SELECT job_id, status, progress, result_url, image_path, error,
-                          seed_used, elapsed_seconds, created_at
+                          seed_used, elapsed_seconds, created_at, params_json
                    FROM jobs ORDER BY created_at DESC LIMIT ?""",
                 (limit,),
             ).fetchall()
-            return [dict(r) for r in rows]
+            result = []
+            for r in rows:
+                job = dict(r)
+                # Extract prompt from params_json
+                params = json.loads(job.pop("params_json") or "{}")
+                job["prompt"] = (params.get("prompt") or
+                                 params.get("name") or "[training job]")
+                result.append(job)
+            return result
+
+    def delete_job(self, job_id: str) -> bool:
+        """Delete a job and its associated image file. Returns True if deleted."""
+        # Get image path first
+        image_path = self.get_image_path(job_id)
+        with self._connect() as conn:
+            cursor = conn.execute("DELETE FROM jobs WHERE job_id = ?", (job_id,))
+            deleted = cursor.rowcount > 0
+        # Remove image file
+        if image_path and Path(image_path).exists():
+            Path(image_path).unlink(missing_ok=True)
+        return deleted
 
     # ── Disk-backed images ───────────────────────────────────
 
