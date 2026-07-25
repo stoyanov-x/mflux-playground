@@ -7,8 +7,8 @@ RUN pip install --no-cache-dir --user -r requirements.txt
 
 # ── Runtime ──────────────────────────────────────────────────
 # NOTE: mflux requires MLX which only runs on Apple Silicon.
-#       This Dockerfile is for local dev / documentation purposes.
-#       On cloud GPU instances you'd use a CUDA-based image instead.
+#       This Dockerfile is for documentation / cloud GPU porting.
+#       On cloud NVIDIA instances use a CUDA-based image instead.
 FROM python:3.12-slim AS runtime
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -23,5 +23,6 @@ ENV PATH=/root/.local/bin:$PATH
 COPY app/ ./app/
 
 EXPOSE 8000
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

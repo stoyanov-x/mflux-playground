@@ -49,150 +49,118 @@ Three services, designed so the **inference backend is swappable** without touch
 
 The inference service (mflux) uses **MLX**, which talks directly to Apple's **Metal GPU** framework. Docker for Mac runs inside a Linux VM — it has **no access to the Metal GPU**, so the inference service **cannot run in Docker on macOS**.
 
-The supporting services (web API, frontend) work fine in Docker. The recommended local workflow is a **hybrid**: inference natively, everything else in Docker.
-
 ### Prerequisites
-- Python 3.12+ with [`uv`](https://docs.astral.sh/uv/) (or pip)
-- .NET 9 SDK *(only if running web API natively)*
-- Node.js 22+ *(only if running frontend natively)*
+- Python 3.12+ with [`uv`](https://docs.astral.sh/uv/)
 - Apple Silicon Mac (for mflux inference)
-- Docker Desktop *(optional — only for hybrid mode)*
+- Node.js 22+ *(only for frontend)*
+- Docker Desktop *(optional — hybrid mode)*
 
-### Option A: Hybrid (inference native, supporting services in Docker)
+### Quick start
 
-**Terminal 1 — Inference (native):**
 ```bash
-cd inference-service
-uv sync
-uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-The first startup downloads the Flux model weights (~25 GB one-time download).
-
-**Terminal 2 — Everything else (Docker):**
-```bash
-docker compose up --build web-api frontend
+./start.sh
 ```
 
-Open **http://localhost:5173**.
+This installs deps, starts the inference service natively, Docker containers for
+web API + frontend, and opens http://localhost:5173.
 
-### Option B: All native (three terminals)
+**First run** will download the FLUX.2 Klein 4B model (~6 GB). This is cached
+after the first download.
 
-**Terminal 1 — Inference:**
-```bash
-cd inference-service
-uv sync
-uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-**Terminal 2 — Web API:**
-```bash
-cd web-api
-dotnet run --urls "http://localhost:5100"
-```
-
-**Terminal 3 — Frontend:**
-```bash
-cd web-frontend
-npm install
-npm run dev
-```
-
-Open **http://localhost:5173**.
-
-### Cloud deployment (Linux + NVIDIA GPU)
-
-On a cloud Linux host, all three services run in Docker. Replace the inference
-service with a CUDA-based image (diffusers, ComfyUI) implementing the same
-[API contract](shared/API_CONTRACT.md).
+### Manual start (three terminals)
 
 ```bash
-docker compose up --build
+# Terminal 1 — inference
+cd inference-service && uv run uvicorn app.main:app --reload --port 8000
+
+# Terminal 2 — supporting services (Docker)
+docker compose up web-api frontend
+
+# Terminal 3 — frontend (if not using Docker)
+cd web-frontend && npm install && npm run dev
 ```
 
 ---
 
-## Training LoRAs
+## What you can do
 
-Since kohya-ss and ai-toolkit require CUDA, train on ephemeral cloud GPUs:
+### 🎨 Generate images
 
-1. **Spin up a GPU instance** on RunPod / Vast.ai / Lambda (4090 or A100)
-2. Install ai-toolkit or kohya-ss
-3. Train your style LoRA (typically a few hours, a few dollars)
-4. Download the resulting `.safetensors` file
-5. Place it in `inference-service/lora_weights/`
-6. Reference it in requests: `"lora_paths": ["lora_weights/my_style.safetensors"]`
+Three tabs in the web UI at http://localhost:5173:
 
-The LoRA weights are portable — same `.safetensors` file works with mflux, diffusers, and ComfyUI.
+**Generate tab** — prompt + negative prompt, select trained LoRAs with
+per-adapter scale sliders, upload a reference image for img2img, adjust
+steps and guidance.
+
+**Train LoRA tab** — upload 10-30 images (drag & drop), name your LoRA,
+configure epochs/steps, start training. Training takes 20-60 minutes on
+M3 Max depending on image count and epochs. The trained `.safetensors`
+automatically appears in the Generate tab's LoRA selector.
+
+**History tab** — past generations with status badges and image previews.
+
+### 🧠 Train a LoRA via API
+
+```bash
+curl -X POST http://localhost:8000/api/v1/train \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "name": "my-watercolor-style",
+    "images": ["<base64-png>", "..."]
+  }'
+```
+
+Then generate with it:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/generate \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "prompt": "a portrait in watercolor style",
+    "lora_paths": ["training/my-watercolor-style.safetensors"],
+    "lora_scales": [0.8]
+  }'
+```
 
 ---
 
-## Cloud Inference (When You Need to Scale)
+## Architecture
+
+```
+┌──────────────┐     ┌──────────────────┐     ┌─────────────────────────┐
+│  React SPA   │────▶│  ASP.NET Core    │────▶│  FastAPI Inference      │
+│  (Vite+TW)   │     │  Web API         │     │  Service (mflux)        │
+│  :5173       │◀────│  :5100           │◀────│  :8000                  │
+└──────────────┘     └──────────────────┘     │                         │
+                          │                    │  ├ Generation worker    │
+                     ┌────┴────┐              │  ├ Training runner      │
+                     │ SQLite  │              │  ├ MLX cache limit 16GB │
+                     │ (EF C)  │              │  ├ os.nice(10)          │
+                     └─────────┘              │  └ LoRA store (files)   │
+                                              └─────────────────────────┘
+```
+
+---
+
+## Supported Models
+
+| Model | Alias | Training | Size | Notes |
+|---|---|---|---|---|
+| **FLUX.2 Klein 4B** | `flux2-klein-4b` | ✅ | 4B params | **Default.** Fastest, smallest, very good quality |
+| FLUX.2 Klein 9B | `flux2-klein-9b` | ✅ | 9B params | Higher quality, larger |
+| Z-Image Turbo | `z-image-turbo` | ✅ | 6B params | Great realism, fast |
+| Z-Image | `z-image` | ✅ | 6B params | Base Z-Image |
+| FLUX.1 dev/schnell | `dev` / `schnell` | ❌ | 12B params | Legacy, no training, removed from cache |
+
+---
+
+## Cloud Portability
 
 The `IInferenceClient` interface in the web API is the swap point.
 To move inference to the cloud:
 
-1. Create a new class implementing `IInferenceClient` (e.g., `ReplicateInferenceClient`)
+1. Implement `IInferenceClient` against Replicate / Fal.ai / RunPod
 2. Register it in `Program.cs` instead of `MfluxInferenceClient`
-3. The inference service contract (`shared/API_CONTRACT.md`) stays the same
+3. The [API contract](shared/API_CONTRACT.md) stays the same
 
-Cloud options:
-- **[Replicate](https://replicate.com/)** — deploy Flux+LoRA as a serverless endpoint
-- **[Fal.ai](https://fal.ai/)** — similar, with Flux-optimised runtimes
-- **[RunPod](https://runpod.io/)** — serverless endpoints with custom diffusers pipelines
-
----
-
-## Project Structure
-
-```
-mflux-experiment/
-├── inference-service/          # FastAPI + mflux (Apple Silicon)
-│   ├── app/
-│   │   ├── main.py             # FastAPI entrypoint
-│   │   ├── config.py           # pydantic-settings
-│   │   ├── models.py           # Pydantic schemas
-│   │   ├── inference.py        # mflux wrapper (the swappable bit)
-│   │   ├── routers/
-│   │   │   └── generate.py     # /api/v1/generate, /jobs/{id}
-│   │   └── services/
-│   │       ├── job_store.py    # In-memory job storage
-│   │       └── job_worker.py   # Background generation worker
-│   ├── requirements.txt
-│   ├── Dockerfile
-│   └── .env
-├── web-api/                    # ASP.NET Core 9
-│   ├── Controllers/
-│   │   └── GenerationController.cs
-│   ├── Models/
-│   │   └── GenerationRequest.cs
-│   ├── Services/
-│   │   ├── IInferenceClient.cs         # Abstraction
-│   │   ├── MfluxInferenceClient.cs     # Local impl
-│   │   └── GenerationJobService.cs     # In-memory tracker
-│   ├── Program.cs
-│   ├── web-api.csproj
-│   └── Dockerfile
-├── web-frontend/               # React 19 + Vite + TypeScript
-│   ├── src/
-│   │   └── App.tsx
-│   ├── package.json
-│   ├── vite.config.ts
-│   └── Dockerfile
-├── shared/
-│   └── API_CONTRACT.md         # Inference service contract
-├── docker-compose.yml
-├── Makefile
-└── .env.example
-```
-
----
-
-## Design Decisions
-
-| Decision | Rationale |
-|---|---|
-| **mflux over ComfyUI+MPS** | 5-10× faster on Apple Silicon; native MLX, not PyTorch-via-MPS |
-| **Async job queue** | M3 Max handles one generation at a time; queue prevents overload and keeps the API responsive |
-| **`IInferenceClient` abstraction** | Swap local Mac inference to cloud without touching the web API logic |
-| **In-memory stores** | Good enough for a personal project; swap for Redis/Postgres when scaling |
-| **LoRA weights as files** | Portable across mflux, diffusers, ComfyUI — no training lock-in |
+Cloud options: **[Replicate](https://replicate.com/)** | **[Fal.ai](https://fal.ai/)** | **[RunPod](https://runpod.io/)**

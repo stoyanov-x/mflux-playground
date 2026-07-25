@@ -10,12 +10,13 @@ public record GenerationRequest(
     List<string>? LoraPaths = null,
     List<double>? LoraScales = null,
     string? ReferenceImageB64 = null,
-    double DenoiseStrength = 0.75,
+    double DenoiseStrength = 0.4,
     int? NumInferenceSteps = null,
     int? Height = null,
     int? Width = null,
     int? Seed = null,
-    double GuidanceScale = 3.5
+    double GuidanceScale = 3.5,
+    string? Model = null
 );
 
 public record JobStatusResponse(

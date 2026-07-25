@@ -122,6 +122,7 @@ class InferenceEngine:
     def _apply_resource_limits() -> None:
         """Throttle MLX and OS to prevent Mac from freezing during inference/training."""
         import os as _os
+
         import mlx.core as mx
 
         # Lower CPU scheduling priority so the UI stays responsive
