@@ -81,6 +81,15 @@ class JobWorker:
             )
 
     def _run_generation(self, job_id: str, req: dict) -> None:
+        # Log warning if a different model was requested (not supported per-request)
+        req_model = req.get("model")
+        if req_model and req_model != self._engine._model_alias:
+            logger.warning(
+                "model_override_ignored",
+                requested=req_model,
+                active=self._engine._model_alias,
+            )
+
         # Lazy-load model on the worker thread (MLX GPU streams are thread-local)
         self._engine.load_model(lora_paths=req.get("lora_paths"))
 

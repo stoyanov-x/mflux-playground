@@ -31,6 +31,7 @@ public class MfluxInferenceClient : IInferenceClient
             width = request.Width,
             seed = request.Seed,
             guidance_scale = request.GuidanceScale,
+            model = request.Model,
         };
 
         var response = await _http.PostAsJsonAsync("/api/v1/generate", payload, ct);

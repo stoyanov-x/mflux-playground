@@ -131,13 +131,13 @@ cd "$SCRIPT_DIR"
 
 # Wait for inference to be ready (may need to download model on first run)
 info "Waiting for inference service to be ready (may download ~6GB model on first run)…"
-local attempt=0
+_attempt=0
 while true; do
     if curl -sf http://localhost:8000/health > /dev/null 2>&1; then
         ok "Inference service is ready."
         break
     fi
-    attempt=$((attempt + 1))
+    _attempt=$((_attempt + 1))
     if [[ $attempt -ge 300 ]]; then  # 5 minute timeout
         warn "Inference service not ready after 5 minutes."
         warn "Check logs with: docker compose logs inference-service"
