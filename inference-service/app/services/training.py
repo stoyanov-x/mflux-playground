@@ -10,6 +10,7 @@ from __future__ import annotations
 import base64
 import io
 import json
+import os
 import shutil
 import tempfile
 import time
@@ -76,6 +77,7 @@ def build_training_config(
     learning_rate: float,
     max_resolution: int,
     quantize: int | None,
+    low_ram: bool = False,
 ) -> dict:
     """Build a training config dict matching mflux's ``train.json`` format."""
     return {
@@ -86,7 +88,7 @@ def build_training_config(
         "guidance": 0.0,
         "quantize": quantize,
         "max_resolution": max_resolution,
-        "low_ram": False,
+        "low_ram": low_ram,
         "training_loop": {
             "num_epochs": num_epochs,
             "batch_size": 1,
@@ -128,14 +130,20 @@ def run_training(
 
     Returns the path to the trained ``.safetensors`` file.
     """
-    # 1. Resolve params
+    # 1. Set low CPU priority so the Mac stays usable during training
+    try:
+        os.nice(settings.nice_level)
+    except Exception:
+        pass
+
+    # 2. Resolve params
     model = model_alias or settings.model_alias
     n_steps = steps or settings.training_steps
     n_epochs = num_epochs or settings.training_epochs
     lr = learning_rate or settings.training_learning_rate
     quant = settings.quantize
 
-    # 2. Save images to a temp directory
+    # 3. Save images to a temp directory
     job_dir = TRAINING_DIR / name
     if job_dir.exists():
         shutil.rmtree(job_dir)
@@ -147,7 +155,7 @@ def run_training(
         img = Image.open(io.BytesIO(raw)).convert("RGB")
         img.save(data_dir / f"{i:04d}.png")
 
-    # 3. Write prompt captions if provided
+    # 4. Write prompt captions if provided
     if prompts:
         captions_file = data_dir / "metadata.jsonl"
         with open(captions_file, "w") as f:
@@ -155,7 +163,7 @@ def run_training(
                 json.dump({"image": f"{i:04d}.png", "prompt": prompt}, f)
                 f.write("\n")
 
-    # 4. Write training config
+    # 5. Write training config
     config = build_training_config(
         model_alias=model,
         data_dir=str(data_dir),
@@ -165,6 +173,7 @@ def run_training(
         learning_rate=lr,
         max_resolution=max_resolution,
         quantize=quant,
+        low_ram=settings.low_ram,
     )
     config_path = job_dir / "train.json"
     with open(config_path, "w") as f:
@@ -195,10 +204,13 @@ def run_training(
 
         latest_zip = checkpoint_zips[-1]
         import zipfile
+
         output_file = TRAINING_DIR / f"{name}.safetensors"
         with zipfile.ZipFile(latest_zip, "r") as zf:
             # Find the adapter safetensors inside the zip
-            adapter_names = [n for n in zf.namelist() if n.endswith("_adapter.safetensors")]
+            adapter_names = [
+                n for n in zf.namelist() if n.endswith("_adapter.safetensors")
+            ]
             if not adapter_names:
                 raise RuntimeError(f"No adapter safetensors found in {latest_zip}")
             with zf.open(adapter_names[0]) as src, open(output_file, "wb") as dst:

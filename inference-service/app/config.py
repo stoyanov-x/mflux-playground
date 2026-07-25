@@ -40,6 +40,14 @@ class InferenceSettings(BaseSettings):
     # ── Job store ────────────────────────────────────────────
     max_completed_jobs: int = 100
 
+    # ── Resource limits (prevents Mac from freezing) ─────────
+    # Limit MLX GPU memory cache in GB (e.g. 8, 16). None = unlimited.
+    mlx_cache_limit_gb: Optional[float] = 16.0
+    # Low RAM mode: offloads data to disk during training.
+    low_ram: bool = False
+    # CPU nice value (higher = lower priority, 0=normal, 10=low, 19=idle).
+    nice_level: int = 10
+
     # ── Training ─────────────────────────────────────────────
     training_dir: str = "training"
     training_steps: int = 9

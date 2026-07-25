@@ -27,9 +27,14 @@ logger = structlog.get_logger(__name__)
 
 # Models known to support training in this mflux version
 TRAINING_CAPABLE_MODELS = {
-    "flux2-klein-4b", "flux2-klein-9b", "flux2-klein-base-4b", "flux2-klein-base-9b",
-    "z-image", "z-image-turbo",
-    "ernie-image", "ernie-image-turbo",
+    "flux2-klein-4b",
+    "flux2-klein-9b",
+    "flux2-klein-base-4b",
+    "flux2-klein-base-9b",
+    "z-image",
+    "z-image-turbo",
+    "ernie-image",
+    "ernie-image-turbo",
 }
 
 
@@ -38,7 +43,9 @@ def is_training_capable(model_alias: str) -> bool:
     return model_alias in TRAINING_CAPABLE_MODELS
 
 
-def _load_model_instance(model_alias: str, quantize: int | None, lora_paths: list[str] | None):
+def _load_model_instance(
+    model_alias: str, quantize: int | None, lora_paths: list[str] | None
+):
     """Dynamically import and construct the right model class for the given alias."""
     from mflux.models.common.config import ModelConfig
 
@@ -48,6 +55,7 @@ def _load_model_instance(model_alias: str, quantize: int | None, lora_paths: lis
     # FLUX.2 family
     if model_alias.startswith("flux2"):
         from mflux.models.flux2.variants.txt2img.flux2_klein import Flux2Klein
+
         return Flux2Klein(
             model_config=model_config,
             quantize=quantize,
@@ -59,6 +67,7 @@ def _load_model_instance(model_alias: str, quantize: int | None, lora_paths: lis
     # FLUX.1 family (legacy)
     if model_alias in ("dev", "schnell", "krea-dev", "dev-krea"):
         from mflux.models.flux.variants.txt2img.flux import Flux1
+
         return Flux1(
             model_config=model_config,
             quantize=quantize,
@@ -70,6 +79,7 @@ def _load_model_instance(model_alias: str, quantize: int | None, lora_paths: lis
     # Z-Image family
     if model_alias.startswith("z-image"):
         from mflux.models.z_image.variants.txt2img.z_image import ZImage
+
         return ZImage(
             model_config=model_config,
             quantize=quantize,
@@ -80,6 +90,7 @@ def _load_model_instance(model_alias: str, quantize: int | None, lora_paths: lis
 
     # Default: try FLUX.1 (covers ideogram, ernie, qwen, fibo)
     from mflux.models.flux.variants.txt2img.flux import Flux1
+
     return Flux1(
         model_config=model_config,
         quantize=quantize,
@@ -97,11 +108,43 @@ class InferenceEngine:
         self._model_alias = settings.model_alias
         self._quantize = settings.quantize
         self._loaded_lora_paths: tuple[str, ...] = ()
+
+        # Apply resource limits once at init
+        self._apply_resource_limits()
+
         logger.info(
             "inference_init",
             model=self._model_alias,
             quantize=self._quantize,
         )
+
+    @staticmethod
+    def _apply_resource_limits() -> None:
+        """Throttle MLX and OS to prevent Mac from freezing during inference/training."""
+        import os as _os
+        import mlx.core as mx
+
+        # Lower CPU scheduling priority so the UI stays responsive
+        try:
+            _os.nice(settings.nice_level)
+        except Exception:
+            pass
+
+        # Limit MLX GPU memory cache
+        if settings.mlx_cache_limit_gb is not None:
+            try:
+                mx.set_cache_limit(settings.mlx_cache_limit_gb * 1024 * 1024 * 1024)
+                logger.info("mlx_cache_limit_set", gb=settings.mlx_cache_limit_gb)
+            except Exception as exc:
+                logger.warning("mlx_cache_limit_failed", error=str(exc))
+
+        # Set wired memory limit as well (prevents system pressure)
+        try:
+            # Use 75% of cache limit as wired limit, or 12GB default
+            wired = (settings.mlx_cache_limit_gb or 16.0) * 0.75 * 1024 * 1024 * 1024
+            mx.set_wired_limit(int(wired))
+        except Exception:
+            pass
 
     # ── Lifecycle ────────────────────────────────────────────
 
