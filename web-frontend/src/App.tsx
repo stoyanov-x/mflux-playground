@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, FormEvent, ChangeEvent } from 'react'
+import { useState, useRef, useEffect, FormEvent } from 'react'
 
 // ── Types ──────────────────────────────────────────────────
 
@@ -168,8 +168,7 @@ function GenerateTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
     }, 2000)
   }
 
-  const handleRefUpload = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
+  const handleRefUpload = (file: File | null) => {
     if (!file) return
     setRefImage(file)
     setRefPreview(URL.createObjectURL(file))
@@ -252,19 +251,27 @@ function GenerateTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
       {/* Reference image upload */}
       <div>
         <label className="block text-sm font-medium text-gray-300 mb-2">Reference image (img2img, optional)</label>
-        <div className="flex items-center gap-4">
-          <label className="bg-gray-800 border border-gray-700 border-dashed rounded-lg px-4 py-3 cursor-pointer hover:bg-gray-700 text-sm text-gray-400">
-            {refImage ? refImage.name : 'Upload image…'}
-            <input type="file" accept="image/*" onChange={handleRefUpload} className="hidden" />
-          </label>
-          {refPreview && (
-            <img src={refPreview} className="h-16 w-16 object-cover rounded-lg border border-gray-700" />
-          )}
-          {refImage && (
-            <button type="button" onClick={() => { setRefImage(null); setRefPreview(null) }}
-              className="text-xs text-red-400 hover:text-red-300">Remove</button>
-          )}
-        </div>
+        {refPreview ? (
+          <div className="flex items-center gap-4">
+            <img src={refPreview} className="h-24 w-24 object-cover rounded-lg border border-gray-700" />
+            <div className="text-sm">
+              <p className="text-gray-300">{refImage?.name}</p>
+              <button type="button" onClick={() => { setRefImage(null); setRefPreview(null) }}
+                className="text-xs text-red-400 hover:text-red-300 mt-1">Remove</button>
+            </div>
+          </div>
+        ) : (
+          <div
+            className="border-2 border-dashed border-gray-700 rounded-lg p-6 text-center cursor-pointer hover:border-gray-500 transition-colors"
+            onClick={() => document.getElementById('ref-file-input')?.click()}
+            onDragOver={e => e.preventDefault()}
+            onDrop={e => { e.preventDefault(); handleRefUpload(e.dataTransfer.files?.[0] ?? null) }}
+          >
+            <p className="text-gray-400 text-sm">Drop a reference image here, or click to browse</p>
+            <input id="ref-file-input" type="file" accept="image/*"
+              onChange={e => handleRefUpload(e.target.files?.[0] ?? null)} className="hidden" />
+          </div>
+        )}
       </div>
 
       {/* Submit */}
