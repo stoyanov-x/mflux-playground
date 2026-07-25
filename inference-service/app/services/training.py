@@ -35,72 +35,32 @@ LORA_TARGETS_FLUX2 = [
     {
         "module_path": "transformer_blocks.{block}.attn.to_q",
         "blocks": {"start": 0, "end": 5},
-        "rank": 16,
+        "rank": 8,
     },
     {
         "module_path": "transformer_blocks.{block}.attn.to_k",
         "blocks": {"start": 0, "end": 5},
-        "rank": 16,
+        "rank": 8,
     },
     {
         "module_path": "transformer_blocks.{block}.attn.to_v",
         "blocks": {"start": 0, "end": 5},
-        "rank": 16,
+        "rank": 8,
     },
     {
         "module_path": "transformer_blocks.{block}.attn.to_out",
         "blocks": {"start": 0, "end": 5},
-        "rank": 16,
-    },
-    {
-        "module_path": "transformer_blocks.{block}.attn.add_q_proj",
-        "blocks": {"start": 0, "end": 5},
-        "rank": 16,
-    },
-    {
-        "module_path": "transformer_blocks.{block}.attn.add_k_proj",
-        "blocks": {"start": 0, "end": 5},
-        "rank": 16,
-    },
-    {
-        "module_path": "transformer_blocks.{block}.attn.add_v_proj",
-        "blocks": {"start": 0, "end": 5},
-        "rank": 16,
-    },
-    {
-        "module_path": "transformer_blocks.{block}.attn.to_add_out",
-        "blocks": {"start": 0, "end": 5},
-        "rank": 16,
-    },
-    {
-        "module_path": "transformer_blocks.{block}.ff.linear_in",
-        "blocks": {"start": 0, "end": 5},
-        "rank": 16,
-    },
-    {
-        "module_path": "transformer_blocks.{block}.ff.linear_out",
-        "blocks": {"start": 0, "end": 5},
-        "rank": 16,
-    },
-    {
-        "module_path": "transformer_blocks.{block}.ff_context.linear_in",
-        "blocks": {"start": 0, "end": 5},
-        "rank": 16,
-    },
-    {
-        "module_path": "transformer_blocks.{block}.ff_context.linear_out",
-        "blocks": {"start": 0, "end": 5},
-        "rank": 16,
+        "rank": 8,
     },
     {
         "module_path": "single_transformer_blocks.{block}.attn.to_qkv_mlp_proj",
         "blocks": {"start": 0, "end": 20},
-        "rank": 16,
+        "rank": 8,
     },
     {
         "module_path": "single_transformer_blocks.{block}.attn.to_out",
         "blocks": {"start": 0, "end": 20},
-        "rank": 16,
+        "rank": 8,
     },
 ]
 
@@ -116,22 +76,22 @@ LORA_TARGETS_ERNIE = [
     {
         "module_path": "layers.{block}.self_attention.to_q",
         "blocks": {"start": 0, "end": 36},
-        "rank": 16,
+        "rank": 8,
     },
     {
         "module_path": "layers.{block}.self_attention.to_k",
         "blocks": {"start": 0, "end": 36},
-        "rank": 16,
+        "rank": 8,
     },
     {
         "module_path": "layers.{block}.self_attention.to_v",
         "blocks": {"start": 0, "end": 36},
-        "rank": 16,
+        "rank": 8,
     },
     {
         "module_path": "layers.{block}.self_attention.to_out.0",
         "blocks": {"start": 0, "end": 36},
-        "rank": 16,
+        "rank": 8,
     },
     {"module_path": "layers.{block}.mlp.gate_proj", "blocks": {"start": 0, "end": 36}, "rank": 16},
     {"module_path": "layers.{block}.mlp.up_proj", "blocks": {"start": 0, "end": 36}, "rank": 16},
