@@ -133,9 +133,16 @@ cd "$SCRIPT_DIR"
 info "Waiting for inference service to be ready (may download ~6GB model on first run)…"
 _attempt=0
 while true; do
-    if curl -sf http://localhost:8000/health > /dev/null 2>&1; then
+    _health=$(curl -sf http://localhost:8000/health 2>/dev/null)
+    if echo "$_health" | grep -q '"ok"'; then
         ok "Inference service is ready."
         break
+    fi
+    if echo "$_health" | grep -q '"loading"'; then
+        # Still downloading — show a progress pulse every 10s
+        if [[ $((_attempt % 10)) -eq 0 ]]; then
+            info "Still downloading model... ($_attempt seconds elapsed)"
+        fi
     fi
     _attempt=$((_attempt + 1))
     if [[ $_attempt -ge 300 ]]; then  # 5 minute timeout
