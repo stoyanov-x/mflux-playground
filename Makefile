@@ -53,6 +53,10 @@ setup:
 	cd inference-service && uv sync
 	cd web-frontend && npm install
 
+## Lint all shell scripts with shellcheck
+lint:
+	shellcheck start.sh shutdown.sh
+
 ## Clean generated artifacts
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true

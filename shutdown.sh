@@ -35,7 +35,11 @@ info "Stopping inference service…"
 PIDS=$(pgrep -f "uvicorn app.main:app" 2>/dev/null || true)
 if [[ -n "$PIDS" ]]; then
     echo "$PIDS" | while read -r pid; do
-        kill "$pid" 2>/dev/null && ok "Killed inference process (PID $pid)" || warn "Could not kill PID $pid (already gone?)"
+        if kill "$pid" 2>/dev/null; then
+            ok "Killed inference process (PID $pid)"
+        else
+            warn "Could not kill PID $pid (already gone?)"
+        fi
     done
 else
     warn "No inference service process found."
