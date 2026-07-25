@@ -38,8 +38,9 @@ Three services, designed so the **inference backend is swappable** without touch
 
 ### 3. Frontend (`web-frontend/`)
 - **React 19 + Vite + TypeScript**
-- Simple single-page app: submit prompts, adjust LoRA scale / step count, poll for results
-- Proxies API calls to the web API during dev
+- Three-tab SPA: Generate (with LoRA selector, img2img), Train LoRA, History
+- In dev mode (`npm run dev`): Vite proxy forwards API calls to backend services
+- In Docker: nginx serves static files and reverse-proxies API calls via `nginx.conf.template`
 
 ---
 
@@ -139,6 +140,36 @@ curl -X POST http://localhost:8000/api/v1/generate \
                      └─────────┘              │  └ LoRA store (files)   │
                                               └─────────────────────────┘
 ```
+
+---
+
+## Configuration
+
+### Nginx proxy (Docker frontend)
+
+When running the frontend in Docker, `nginx.conf.template` uses
+`envsubst` at startup to inject two environment variables:
+
+| Variable | Default (Mac) | Default (Linux) |
+|---|---|---|
+| `INFERENCE_API_URL` | `http://host.docker.internal:8000` | `http://inference-service:8000` |
+| `WEB_API_URL` | `http://web-api:8080` | `http://web-api:8080` |
+
+Override in `docker-compose.yml` or via `docker compose run -e`:
+
+```yaml
+frontend:
+  environment:
+    INFERENCE_API_URL: "http://inference-service:8000"
+```
+
+### Resource limits
+
+Set via `.env` or environment variables (prefix `MFLUX_`):
+
+- `MFLUX_MLX_CACHE_LIMIT_GB` — MLX GPU cache (default: 16 GB)
+- `MFLUX_LOW_RAM` — offload training data to disk (default: true)
+- `MFLUX_NICE_LEVEL` — CPU priority, higher = lower (default: 10)
 
 ---
 
