@@ -5,8 +5,9 @@ This keeps the inference contract portable — swap the backend without
 changing any calling code.
 """
 
-from pydantic_settings import BaseSettings
 from typing import Optional
+
+from pydantic_settings import BaseSettings
 
 
 class InferenceSettings(BaseSettings):
@@ -18,7 +19,7 @@ class InferenceSettings(BaseSettings):
     log_level: str = "info"
 
     # ── Model defaults ───────────────────────────────────────
-    model_alias: str = "schnell"             # "dev" | "schnell"
+    model_alias: str = "schnell"  # "dev" | "schnell"
     default_num_steps: int = 25
     default_height: int = 1024
     default_width: int = 1024
