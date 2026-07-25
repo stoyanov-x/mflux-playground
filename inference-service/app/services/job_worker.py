@@ -32,7 +32,7 @@ class JobWorker:
         self._thread: threading.Thread | None = None
 
     def start(self) -> None:
-        self._engine.load_model()
+        # Model is loaded lazily by the worker thread (MLX streams are thread-local).
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
         logger.info("worker_started")
@@ -59,6 +59,9 @@ class JobWorker:
         job = self._store.get_job(job_id)
         if job is None:
             return
+
+        # Lazy-load model in this thread (MLX GPU streams are thread-local).
+        self._engine.load_model()
 
         self._store.update_job(job_id, status=JobStatus.running.value, progress=0.0)
         logger.info("job_started", job_id=job_id)
