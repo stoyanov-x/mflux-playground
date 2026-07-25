@@ -63,7 +63,7 @@ export default function App() {
           ))}
         </div>
 
-        {tab === 'generate' && <GenerateTab />}
+        {tab === 'generate' && <GenerateTab onNavigate={setTab} />}
         {tab === 'train' && <TrainTab />}
         {tab === 'history' && <HistoryTab />}
       </div>
@@ -75,7 +75,7 @@ export default function App() {
 //  Generate Tab
 // ═══════════════════════════════════════════════════════════════
 
-function GenerateTab() {
+function GenerateTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
   const [prompt, setPrompt] = useState('')
   const [negativePrompt, setNegativePrompt] = useState('')
   const [steps, setSteps] = useState(25)
@@ -197,10 +197,12 @@ function GenerateTab() {
         />
       </div>
 
-      {/* LoRA selector */}
-      {loras.length > 0 && (
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">LoRA Adapters</label>
+      {/* LoRA selector — always visible, shows message when empty */}
+      <div>
+        <label className="block text-sm font-medium text-gray-300 mb-2">LoRA Adapters</label>
+        {loras.length === 0 ? (
+          <p className="text-gray-500 text-sm">No trained LoRAs yet. Go to the <button type="button" onClick={() => onNavigate('train')} className="text-blue-400 hover:text-blue-300 underline">Train LoRA</button> tab to create one.</p>
+        ) : (
           <div className="space-y-2">
             {loras.map(lora => (
               <label key={lora.path} className="flex items-center gap-3 bg-gray-800 rounded-lg px-4 py-2 cursor-pointer hover:bg-gray-750">
@@ -226,8 +228,8 @@ function GenerateTab() {
               </label>
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Parameters row */}
       <div className="flex gap-4 flex-wrap">
