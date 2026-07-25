@@ -15,7 +15,9 @@ from __future__ import annotations
 
 import base64
 import io
+import tempfile
 import time
+from pathlib import Path
 from typing import Optional
 
 import structlog
@@ -48,13 +50,30 @@ class InferenceEngine:
     def load_model(self) -> None:
         """Load (or reload) the Flux model with configured options."""
         if self._model is not None:
-            return  # already loaded; could add reload-on-config-change
+            return  # already loaded
 
-        from mflux import Flux1  # slow import – only when needed
+        # Current mflux API (mid-2026): Flux1 takes ModelConfig, not from_alias()
+        from mflux.models.common.config import ModelConfig
+        from mflux.models.flux.variants.txt2img.flux import Flux1
 
-        kwargs = {"quantize": self._quantize} if self._quantize else {}
-        self._model = Flux1.from_alias(self._model_alias, **kwargs)
-        logger.info("model_loaded", alias=self._model_alias, quantize=self._quantize)
+        model_config = ModelConfig.from_name(
+            model_name=self._model_alias,
+            base_model=None,
+        )
+
+        self._model = Flux1(
+            model_config=model_config,
+            quantize=self._quantize,
+            model_path=None,
+            lora_paths=self._default_lora_paths or None,
+            lora_scales=[0.8] * len(self._default_lora_paths) or None,
+        )
+        logger.info(
+            "model_loaded",
+            alias=self._model_alias,
+            quantize=self._quantize,
+            loras=self._default_lora_paths,
+        )
 
     def unload_model(self) -> None:
         self._model = None
@@ -70,7 +89,7 @@ class InferenceEngine:
         lora_paths: Optional[list[str]] = None,
         lora_scales: Optional[list[float]] = None,
         reference_image_b64: Optional[str] = None,
-        denoise_strength: float = 0.75,
+        denoise_strength: float = 0.4,
         num_inference_steps: Optional[int] = None,
         height: Optional[int] = None,
         width: Optional[int] = None,
@@ -84,58 +103,48 @@ class InferenceEngine:
         -------
         (image, seed_used, elapsed_seconds)
         """
-        from mflux import Config
-
-        # Merge default LoRAs with any request-specific ones.
-        all_lora_paths = list(self._default_lora_paths)
-        if lora_paths:
-            all_lora_paths.extend(lora_paths)
-
-        all_lora_scales = lora_scales or [0.8] * len(all_lora_paths)
-
         steps = num_inference_steps or settings.default_num_steps
         h = height or settings.default_height
         w = width or settings.default_width
         seed = seed or int(time.time() * 1000) % (2**31)
 
-        cfg = Config(
-            num_inference_steps=steps,
-            height=h,
-            width=w,
-            guidance_scale=guidance_scale,
-        )
+        # ── img2img: save base64 ref to temp file ────────────
+        image_path: Path | None = None
+        temp_file = None
+        if reference_image_b64 is not None:
+            raw = base64.b64decode(reference_image_b64)
+            ref = Image.open(io.BytesIO(raw)).convert("RGB")
+            temp_file = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+            ref.save(temp_file, format="PNG")
+            image_path = Path(temp_file.name)
 
         start = time.perf_counter()
 
-        if reference_image_b64 is not None:
-            # Image-to-image branch
-            raw = base64.b64decode(reference_image_b64)
-            ref_image = Image.open(io.BytesIO(raw)).convert("RGB")
-            image = self._model.generate_image(
+        try:
+            result = self._model.generate_image(
                 seed=seed,
                 prompt=prompt,
-                config=cfg,
-                image=ref_image,
-                strength=denoise_strength,
+                width=w,
+                height=h,
+                guidance=guidance_scale,
+                scheduler="linear",
+                image_path=image_path,
+                num_inference_steps=steps,
+                image_strength=denoise_strength if image_path else None,
+                negative_prompt=negative_prompt,
             )
-        else:
-            # Text-to-image branch (with optional LoRAs)
-            image = self._model.generate_image(
-                seed=seed,
-                prompt=prompt,
-                config=cfg,
-                lora_paths=all_lora_paths or None,
-                lora_scales=all_lora_scales or None,
-            )
+        finally:
+            if temp_file is not None:
+                temp_file.close()
+                Path(temp_file.name).unlink(missing_ok=True)
 
         elapsed = time.perf_counter() - start
 
         logger.info(
             "generation_complete",
             prompt_trunc=prompt[:60],
-            seed=seed,
+            seed=result.seed,
             elapsed=f"{elapsed:.2f}s",
-            loras=all_lora_paths,
         )
 
-        return image, seed, elapsed
+        return result.image, result.seed, elapsed
