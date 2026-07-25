@@ -12,11 +12,9 @@ import io
 import threading
 
 import structlog
-
-from app.config import settings
-from app.inference import InferenceEngine
 from mflux.utils.exceptions import StopImageGenerationException
 
+from app.config import settings
 from app.inference import InferenceEngine
 from app.models import JobStatus
 from app.services.job_store import JobStore, get_job_store
