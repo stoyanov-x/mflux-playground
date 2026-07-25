@@ -121,6 +121,17 @@ class JobStore:
                 return json.loads(row["params_json"])
             return None
 
+    def list_jobs(self, limit: int = 50) -> list[dict]:
+        """Return recent jobs, newest first."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT job_id, status, progress, result_url, image_path, error,
+                          seed_used, elapsed_seconds, created_at
+                   FROM jobs ORDER BY created_at DESC LIMIT ?""",
+                (limit,),
+            ).fetchall()
+            return [dict(r) for r in rows]
+
     # ── Disk-backed images ───────────────────────────────────
 
     def set_image(self, job_id: str, image_bytes: bytes) -> str:

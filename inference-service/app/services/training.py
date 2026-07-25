@@ -143,8 +143,11 @@ def run_training(
     lr = learning_rate or settings.training_learning_rate
     quant = settings.quantize
 
+    # Prefixed name prevents cross-model LoRA mixups (e.g. flux2 LoRA on z-image)
+    prefixed_name = f"{model}__{name}"
+
     # 3. Save images to a temp directory
-    job_dir = TRAINING_DIR / name
+    job_dir = TRAINING_DIR / prefixed_name
     if job_dir.exists():
         shutil.rmtree(job_dir)
     data_dir = job_dir / "images"
@@ -205,7 +208,7 @@ def run_training(
         latest_zip = checkpoint_zips[-1]
         import zipfile
 
-        output_file = TRAINING_DIR / f"{name}.safetensors"
+        output_file = TRAINING_DIR / f"{prefixed_name}.safetensors"
         with zipfile.ZipFile(latest_zip, "r") as zf:
             # Find the adapter safetensors inside the zip
             adapter_names = [

@@ -68,6 +68,14 @@ async def get_job_image(
     return Response(content=Path(image_path).read_bytes(), media_type="image/png")
 
 
+@router.get("/jobs")
+async def list_jobs(
+    store: JobStore = Depends(get_job_store),
+) -> list[dict]:
+    """List recent generation jobs (newest first)."""
+    return await asyncio.to_thread(store.list_jobs, 50)
+
+
 # ═══════════════════════════════════════════════════════════════
 #  Training
 # ═══════════════════════════════════════════════════════════════

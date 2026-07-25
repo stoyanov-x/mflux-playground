@@ -454,12 +454,16 @@ function HistoryTab() {
   const [jobs, setJobs] = useState<Job[]>([])
 
   useEffect(() => {
-    // Load from local state or session
-    const stored = sessionStorage.getItem('mflux_jobs')
-    if (stored) setJobs(JSON.parse(stored))
-
-    // Fetch/reconcile with inference service (last 50)
-    fetch(`${INFERENCE_API}/jobs/???`)
+    fetch(`${INFERENCE_API}/jobs`)
+      .then(r => r.json())
+      .then(data => setJobs(data.map((j: Record<string, unknown>) => ({
+        id: j.job_id,
+        prompt: '',
+        status: j.status,
+        resultUrl: j.result_url,
+        error: j.error,
+        createdAt: j.created_at,
+      }))))
       .catch(() => {})
   }, [])
 
