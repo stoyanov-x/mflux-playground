@@ -251,9 +251,11 @@ def run_training(
         for i, prompt in enumerate(prompts):
             (data_dir / f"{i:04d}.txt").write_text(prompt, encoding="utf-8")
     else:
-        # Write empty prompt files so mflux's data discovery doesn't fail
+        # Write neutral prompts (empty strings cause text encoder to produce
+        # zero-length arrays, crashing mx.save_safetensors with
+        # "Cannot serialize an empty array").
         for i in range(len(images_b64)):
-            (data_dir / f"{i:04d}.txt").write_text("", encoding="utf-8")
+            (data_dir / f"{i:04d}.txt").write_text("a photo", encoding="utf-8")
 
     # 5. Write training config
     config = build_training_config(
