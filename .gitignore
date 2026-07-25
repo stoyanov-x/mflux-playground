@@ -33,3 +33,5 @@ data/
 # Environment
 .env
 .env.local
+
+.mypy_cache/
