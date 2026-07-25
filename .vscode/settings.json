@@ -1,0 +1,25 @@
+{
+  // ── Python type checking ──────────────────────────────────
+  // "off" | "basic" | "standard" | "strict"
+  // "standard" catches real type mismatches without requiring
+  // full annotation coverage everywhere.
+  "python.analysis.typeCheckingMode": "standard",
+
+  // Auto-format on save with Ruff (fast Python formatter).
+  "[python]": {
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit"
+    },
+    "editor.defaultFormatter": "charliermarsh.ruff"
+  },
+
+  // Show type hints for function return types and variable types.
+  "python.analysis.inlayHints.functionReturnTypes": true,
+  "python.analysis.inlayHints.variableTypes": true,
+
+  // Report shadowing of builtins / stdlib names as errors.
+  "python.analysis.diagnosticSeverityOverrides": {
+    "reportShadowedImports": "warning"
+  }
+}
