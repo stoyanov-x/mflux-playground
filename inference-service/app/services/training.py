@@ -28,7 +28,9 @@ TRAINING_DIR.mkdir(parents=True, exist_ok=True)
 
 # Default training config template (FLUX.2 Klein / Z-Image compatible)
 # ── LoRA target paths per model family ──────────────────────
-# FLUX.2 uses transformer_blocks + single_transformer_blocks
+# Sources: official mflux READMEs at github.com/filipstrand/mflux
+
+# FLUX.2 (from src/mflux/models/flux2/README.md)
 LORA_TARGETS_FLUX2 = [
     {"module_path": "transformer_blocks.{block}.attn.to_q", "blocks": {"start": 0, "end": 5}, "rank": 16},
     {"module_path": "transformer_blocks.{block}.attn.to_k", "blocks": {"start": 0, "end": 5}, "rank": 16},
@@ -46,26 +48,37 @@ LORA_TARGETS_FLUX2 = [
     {"module_path": "single_transformer_blocks.{block}.attn.to_out", "blocks": {"start": 0, "end": 20}, "rank": 16},
 ]
 
-# Z-Image uses layers.{block}.attention.*
+# Z-Image Turbo (from src/mflux/models/z_image/README.md example)
 LORA_TARGETS_ZIMAGE = [
-    {"module_path": "layers.{block}.attention.to_q", "blocks": {"start": 0, "end": 30}, "rank": 16},
-    {"module_path": "layers.{block}.attention.to_k", "blocks": {"start": 0, "end": 30}, "rank": 16},
-    {"module_path": "layers.{block}.attention.to_v", "blocks": {"start": 0, "end": 30}, "rank": 16},
-    {"module_path": "layers.{block}.attention.to_out.0", "blocks": {"start": 0, "end": 30}, "rank": 16},
-    {"module_path": "layers.{block}.feed_forward.w1", "blocks": {"start": 0, "end": 30}, "rank": 16},
-    {"module_path": "layers.{block}.feed_forward.w2", "blocks": {"start": 0, "end": 30}, "rank": 16},
-    {"module_path": "layers.{block}.feed_forward.w3", "blocks": {"start": 0, "end": 30}, "rank": 16},
-    {"module_path": "cap_embedder.1", "rank": 16},
-    {"module_path": "all_final_layer.2-1.linear", "rank": 16},
+    {"module_path": "layers.{block}.attention.to_q", "blocks": {"start": 15, "end": 30}, "rank": 8},
+    {"module_path": "layers.{block}.attention.to_k", "blocks": {"start": 15, "end": 30}, "rank": 8},
+    {"module_path": "layers.{block}.attention.to_v", "blocks": {"start": 15, "end": 30}, "rank": 8},
+]
+
+# ERNIE-Image (from src/mflux/models/common/training/_example/train_ernie_image.json)
+LORA_TARGETS_ERNIE = [
+    {"module_path": "layers.{block}.self_attention.to_q", "blocks": {"start": 0, "end": 36}, "rank": 16},
+    {"module_path": "layers.{block}.self_attention.to_k", "blocks": {"start": 0, "end": 36}, "rank": 16},
+    {"module_path": "layers.{block}.self_attention.to_v", "blocks": {"start": 0, "end": 36}, "rank": 16},
+    {"module_path": "layers.{block}.self_attention.to_out.0", "blocks": {"start": 0, "end": 36}, "rank": 16},
+    {"module_path": "layers.{block}.mlp.gate_proj", "blocks": {"start": 0, "end": 36}, "rank": 16},
+    {"module_path": "layers.{block}.mlp.up_proj", "blocks": {"start": 0, "end": 36}, "rank": 16},
+    {"module_path": "layers.{block}.mlp.linear_fc2", "blocks": {"start": 0, "end": 36}, "rank": 16},
+    {"module_path": "text_proj", "rank": 16},
 ]
 
 
 def _lora_targets_for_model(model_alias: str) -> list[dict]:
-    """Return the appropriate LoRA target paths for the given model."""
+    """Return the appropriate LoRA target paths for the given model.
+
+    Sources: official mflux model READMEs.
+    """
     if model_alias.startswith("flux2"):
         return LORA_TARGETS_FLUX2
     if model_alias.startswith("z-image"):
         return LORA_TARGETS_ZIMAGE
+    if model_alias.startswith("ernie"):
+        return LORA_TARGETS_ERNIE
     # Default: FLUX.2 targets (covers most models)
     return LORA_TARGETS_FLUX2
 
