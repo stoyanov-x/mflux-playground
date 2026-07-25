@@ -249,7 +249,10 @@ def run_training(
     # 4. Write prompt captions — mflux requires a .txt file per image
     if prompts:
         for i, prompt in enumerate(prompts):
-            (data_dir / f"{i:04d}.txt").write_text(prompt, encoding="utf-8")
+            # Empty prompts crash the text encoder (zero-length arrays).
+            # Fall back to a neutral caption for any blank entries.
+            caption = prompt.strip() or "a photo"
+            (data_dir / f"{i:04d}.txt").write_text(caption, encoding="utf-8")
     else:
         # Write neutral prompts (empty strings cause text encoder to produce
         # zero-length arrays, crashing mx.save_safetensors with
