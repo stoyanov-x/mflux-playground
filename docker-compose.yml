@@ -54,6 +54,12 @@ services:
       dockerfile: Dockerfile
     ports:
       - "5173:80"
+    environment:
+      # Inference API URL. On Mac, host.docker.internal reaches the host.
+      # On Linux, replace with the inference service container name or host IP.
+      INFERENCE_API_URL: "http://host.docker.internal:8000"
+      # Web API URL — always the Docker service name on the internal network.
+      WEB_API_URL: "http://web-api:8080"
     depends_on:
       - web-api
 
