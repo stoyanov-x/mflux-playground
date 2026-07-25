@@ -23,7 +23,7 @@ structlog.configure(
     ],
     wrapper_class=structlog.stdlib.BoundLogger,
     context_class=dict,
-    logger_factory=structlog.PrintLoggerFactory(),
+    logger_factory=structlog.stdlib.LoggerFactory(),
     cache_logger_on_first_use=True,
 )
 
@@ -49,6 +49,7 @@ app.include_router(generate.router)
 @app.get("/health", response_model=HealthResponse)
 async def health():
     from app.services.job_worker import get_worker
+
     worker = get_worker()
     engine = worker._engine
     return HealthResponse(
@@ -60,6 +61,7 @@ async def health():
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(
         "app.main:app",
         host=settings.host,
