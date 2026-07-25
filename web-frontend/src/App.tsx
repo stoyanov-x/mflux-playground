@@ -18,7 +18,6 @@ type Job = {
 // ── Helpers ────────────────────────────────────────────────
 
 const INFERENCE_API = '/api/v1'
-const WEB_API = '/api/generation'
 
 function readFileAsBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -298,7 +297,7 @@ function TrainTab() {
   const [epochs, setEpochs] = useState(50)
   const [steps, setSteps] = useState(9)
   const [training, setTraining] = useState(false)
-  const [jobId, setJobId] = useState<string | null>(null)
+  const [, setJobId] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
