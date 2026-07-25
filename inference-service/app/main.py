@@ -51,6 +51,12 @@ async def health():
     return HealthResponse(
         status="ok",
         model_alias=settings.model_alias,
+        models_available=[
+            "flux2-klein-4b",
+            "flux2-klein-9b",
+            "z-image-turbo",
+            "z-image",
+        ],
         quantize=settings.quantize,
     )
 

@@ -1,14 +1,12 @@
 """mflux inference wrapper.
 
+Supports FLUX.1, FLUX.2, Z-Image, and other mflux model families.
+Model is reloaded when LoRA paths change (MLX streams are thread-local,
+so the model must be loaded on the worker thread).
+
 This module is the one piece that changes when you swap the inference
 backend. The rest of the service (routers, job queue) talks only to
-the `InferenceEngine` interface defined here.
-
-To port to a cloud target (Replicate / Fal.ai / RunPod) you'd:
-
-  1. Create a new class implementing the same `generate()` signature.
-  2. Swap it in via `main.py` or config.
-  3. The FastAPI routers and job store stay untouched.
+the `InferenceEngine` interface.
 """
 
 from __future__ import annotations
@@ -27,6 +25,69 @@ from app.config import settings
 
 logger = structlog.get_logger(__name__)
 
+# Models known to support training in this mflux version
+TRAINING_CAPABLE_MODELS = {
+    "flux2-klein-4b", "flux2-klein-9b", "flux2-klein-base-4b", "flux2-klein-base-9b",
+    "z-image", "z-image-turbo",
+    "ernie-image", "ernie-image-turbo",
+}
+
+
+def is_training_capable(model_alias: str) -> bool:
+    """Check if a model alias supports LoRA training."""
+    return model_alias in TRAINING_CAPABLE_MODELS
+
+
+def _load_model_instance(model_alias: str, quantize: int | None, lora_paths: list[str] | None):
+    """Dynamically import and construct the right model class for the given alias."""
+    from mflux.models.common.config import ModelConfig
+
+    model_config = ModelConfig.from_name(model_name=model_alias, base_model=None)
+    lora_scales = [0.8] * len(lora_paths) if lora_paths else None
+
+    # FLUX.2 family
+    if model_alias.startswith("flux2"):
+        from mflux.models.flux2.variants.txt2img.flux2_klein import Flux2Klein
+        return Flux2Klein(
+            model_config=model_config,
+            quantize=quantize,
+            model_path=None,
+            lora_paths=lora_paths,
+            lora_scales=lora_scales,
+        ), model_config
+
+    # FLUX.1 family (legacy)
+    if model_alias in ("dev", "schnell", "krea-dev", "dev-krea"):
+        from mflux.models.flux.variants.txt2img.flux import Flux1
+        return Flux1(
+            model_config=model_config,
+            quantize=quantize,
+            model_path=None,
+            lora_paths=lora_paths,
+            lora_scales=lora_scales,
+        ), model_config
+
+    # Z-Image family
+    if model_alias.startswith("z-image"):
+        from mflux.models.z_image.variants.txt2img.z_image import ZImage
+        return ZImage(
+            model_config=model_config,
+            quantize=quantize,
+            model_path=None,
+            lora_paths=lora_paths,
+            lora_scales=lora_scales,
+        ), model_config
+
+    # Default: try FLUX.1 (covers ideogram, ernie, qwen, fibo)
+    from mflux.models.flux.variants.txt2img.flux import Flux1
+    return Flux1(
+        model_config=model_config,
+        quantize=quantize,
+        model_path=None,
+        lora_paths=lora_paths,
+        lora_scales=lora_scales,
+    ), model_config
+
 
 class InferenceEngine:
     """Wraps an mflux model for local inference on Apple Silicon."""
@@ -35,48 +96,39 @@ class InferenceEngine:
         self._model = None
         self._model_alias = settings.model_alias
         self._quantize = settings.quantize
-        self._default_lora_paths = [
-            p.strip() for p in settings.lora_paths.split(",") if p.strip()
-        ]
+        self._loaded_lora_paths: tuple[str, ...] = ()
         logger.info(
             "inference_init",
-            model_alias=self._model_alias,
+            model=self._model_alias,
             quantize=self._quantize,
-            default_loras=self._default_lora_paths,
         )
 
     # ── Lifecycle ────────────────────────────────────────────
 
-    def load_model(self) -> None:
-        """Load (or reload) the Flux model with configured options."""
-        if self._model is not None:
-            return  # already loaded
+    def load_model(self, lora_paths: Optional[list[str]] = None) -> None:
+        """Ensure the model is loaded with the given LoRA paths."""
+        lora_tuple = tuple(lora_paths or [])
+        if self._model is not None and self._loaded_lora_paths == lora_tuple:
+            return
 
-        # Current mflux API (mid-2026): Flux1 takes ModelConfig, not from_alias()
-        from mflux.models.common.config import ModelConfig
-        from mflux.models.flux.variants.txt2img.flux import Flux1
-
-        model_config = ModelConfig.from_name(
-            model_name=self._model_alias,
-            base_model=None,
-        )
-
-        self._model = Flux1(
-            model_config=model_config,
-            quantize=self._quantize,
-            model_path=None,
-            lora_paths=self._default_lora_paths or None,
-            lora_scales=[0.8] * len(self._default_lora_paths) or None,
-        )
         logger.info(
-            "model_loaded",
-            alias=self._model_alias,
+            "model_loading",
+            model=self._model_alias,
             quantize=self._quantize,
-            loras=self._default_lora_paths,
+            loras=lora_tuple,
         )
+
+        self._model, _ = _load_model_instance(
+            model_alias=self._model_alias,
+            quantize=self._quantize,
+            lora_paths=list(lora_tuple) if lora_tuple else None,
+        )
+        self._loaded_lora_paths = lora_tuple
+        logger.info("model_loaded", loras=self._loaded_lora_paths)
 
     def unload_model(self) -> None:
         self._model = None
+        self._loaded_lora_paths = ()
         logger.info("model_unloaded")
 
     # ── Core generation ──────────────────────────────────────
@@ -103,10 +155,16 @@ class InferenceEngine:
         -------
         (image, seed_used, elapsed_seconds)
         """
+        self.load_model(lora_paths=lora_paths)
+
         steps = num_inference_steps or settings.default_num_steps
         h = height or settings.default_height
         w = width or settings.default_width
         seed = seed or int(time.time() * 1000) % (2**31)
+
+        # FLUX.2 uses a different scheduler and doesn't support negative_prompt
+        is_flux2 = self._model_alias.startswith("flux2")
+        scheduler = "flow_match_euler_discrete" if is_flux2 else "linear"
 
         # ── img2img: save base64 ref to temp file ────────────
         image_path: Path | None = None
@@ -121,18 +179,21 @@ class InferenceEngine:
         start = time.perf_counter()
 
         try:
-            result = self._model.generate_image(
-                seed=seed,
-                prompt=prompt,
-                width=w,
-                height=h,
-                guidance=guidance_scale,
-                scheduler="linear",
-                image_path=image_path,
-                num_inference_steps=steps,
-                image_strength=denoise_strength if image_path else None,
-                negative_prompt=negative_prompt,
-            )
+            kwargs = {
+                "seed": seed,
+                "prompt": prompt,
+                "width": w,
+                "height": h,
+                "guidance": guidance_scale,
+                "scheduler": scheduler,
+                "image_path": image_path,
+                "num_inference_steps": steps,
+                "image_strength": denoise_strength if image_path else None,
+            }
+            if not is_flux2 and negative_prompt:
+                kwargs["negative_prompt"] = negative_prompt
+
+            result = self._model.generate_image(**kwargs)
         finally:
             if temp_file is not None:
                 temp_file.close()
@@ -144,7 +205,18 @@ class InferenceEngine:
             "generation_complete",
             prompt_trunc=prompt[:60],
             seed=result.seed,
+            steps=steps,
             elapsed=f"{elapsed:.2f}s",
         )
 
         return result.image, result.seed, elapsed
+
+    # ── Model info ───────────────────────────────────────────
+
+    @property
+    def loaded_lora_paths(self) -> list[str]:
+        return list(self._loaded_lora_paths)
+
+    @property
+    def is_loaded(self) -> bool:
+        return self._model is not None

@@ -30,6 +30,10 @@ generated_images/
 data/
 **/data/
 
+# Training outputs
+training/
+**/training/
+
 # Environment
 .env
 .env.local

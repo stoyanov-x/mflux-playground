@@ -60,45 +60,17 @@ class JobWorker:
         if job is None:
             return
 
-        # Lazy-load model in this thread (MLX GPU streams are thread-local).
-        self._engine.load_model()
-
         self._store.update_job(job_id, status=JobStatus.running.value, progress=0.0)
-        logger.info("job_started", job_id=job_id)
+        logger.info("job_started", job_id=job_id, type=job.get("type", "generate"))
 
         try:
             req = self._store.get_params(job_id) or {}
 
-            image, seed, elapsed = self._engine.generate(
-                prompt=req.get("prompt", ""),
-                negative_prompt=req.get("negative_prompt"),
-                lora_paths=req.get("lora_paths"),
-                lora_scales=req.get("lora_scales"),
-                reference_image_b64=req.get("reference_image_b64"),
-                denoise_strength=req.get("denoise_strength", 0.75),
-                num_inference_steps=req.get("num_inference_steps"),
-                height=req.get("height"),
-                width=req.get("width"),
-                seed=req.get("seed"),
-                guidance_scale=req.get("guidance_scale", 3.5),
-            )
-
-            buf = io.BytesIO()
-            image.save(buf, format="PNG")
-            image_bytes = buf.getvalue()
-
-            self._store.set_image(job_id, image_bytes)
-            result_url = f"/api/v1/jobs/{job_id}/image"
-
-            self._store.update_job(
-                job_id,
-                status=JobStatus.completed.value,
-                progress=1.0,
-                result_url=result_url,
-                seed_used=seed,
-                elapsed_seconds=round(elapsed, 2),
-            )
-            logger.info("job_completed", job_id=job_id, elapsed=f"{elapsed:.2f}s")
+            # Dispatch: training vs generation
+            if req.get("type") == "train":
+                self._run_training(job_id, req)
+            else:
+                self._run_generation(job_id, req)
 
         except Exception as exc:
             logger.error("job_failed", job_id=job_id, error=str(exc))
@@ -107,6 +79,65 @@ class JobWorker:
                 status=JobStatus.failed.value,
                 error=str(exc),
             )
+
+    def _run_generation(self, job_id: str, req: dict) -> None:
+        # Lazy-load model on the worker thread (MLX GPU streams are thread-local)
+        self._engine.load_model(lora_paths=req.get("lora_paths"))
+
+        image, seed, elapsed = self._engine.generate(
+            prompt=req.get("prompt", ""),
+            negative_prompt=req.get("negative_prompt"),
+            lora_paths=req.get("lora_paths"),
+            lora_scales=req.get("lora_scales"),
+            reference_image_b64=req.get("reference_image_b64"),
+            denoise_strength=req.get("denoise_strength", 0.4),
+            num_inference_steps=req.get("num_inference_steps"),
+            height=req.get("height"),
+            width=req.get("width"),
+            seed=req.get("seed"),
+            guidance_scale=req.get("guidance_scale", 3.5),
+        )
+
+        buf = io.BytesIO()
+        image.save(buf, format="PNG")
+        image_bytes = buf.getvalue()
+
+        self._store.set_image(job_id, image_bytes)
+        result_url = f"/api/v1/jobs/{job_id}/image"
+
+        self._store.update_job(
+            job_id,
+            status=JobStatus.completed.value,
+            progress=1.0,
+            result_url=result_url,
+            seed_used=seed,
+            elapsed_seconds=round(elapsed, 2),
+        )
+        logger.info("job_completed", job_id=job_id, elapsed=f"{elapsed:.2f}s")
+
+    def _run_training(self, job_id: str, req: dict) -> None:
+        from app.services.training import run_training
+
+        output_path = run_training(
+            name=req.get("name", f"lora-{job_id[:8]}"),
+            images_b64=req.get("images", []),
+            prompts=req.get("prompts"),
+            model_alias=req.get("model"),
+            steps=req.get("steps"),
+            num_epochs=req.get("num_epochs"),
+            learning_rate=req.get("learning_rate"),
+            max_resolution=req.get("max_resolution", 1024),
+        )
+
+        self._store.update_job(
+            job_id,
+            status=JobStatus.completed.value,
+            progress=1.0,
+            result_url=f"/api/v1/lora/list",
+            seed_used=None,
+            elapsed_seconds=None,
+        )
+        logger.info("training_completed", job_id=job_id, lora_path=str(output_path))
 
 
 # ── Dependency ──────────────────────────────────────────────

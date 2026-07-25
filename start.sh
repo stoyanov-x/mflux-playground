@@ -129,8 +129,22 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level info &
 INFERENCE_PID=$!
 cd "$SCRIPT_DIR"
 
-# Wait for inference to be ready
-wait_for_port "localhost" 8000 "Inference service" 120
+# Wait for inference to be ready (may need to download model on first run)
+info "Waiting for inference service to be ready (may download ~6GB model on first run)…"
+local attempt=0
+while true; do
+    if curl -sf http://localhost:8000/health > /dev/null 2>&1; then
+        ok "Inference service is ready."
+        break
+    fi
+    attempt=$((attempt + 1))
+    if [[ $attempt -ge 300 ]]; then  # 5 minute timeout
+        warn "Inference service not ready after 5 minutes."
+        warn "Check logs with: docker compose logs inference-service"
+        break
+    fi
+    sleep 1
+done
 
 # ── Print summary ───────────────────────────────────────────
 
