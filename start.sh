@@ -138,7 +138,7 @@ while true; do
         break
     fi
     _attempt=$((_attempt + 1))
-    if [[ $attempt -ge 300 ]]; then  # 5 minute timeout
+    if [[ $_attempt -ge 300 ]]; then  # 5 minute timeout
         warn "Inference service not ready after 5 minutes."
         warn "Check logs with: docker compose logs inference-service"
         break
