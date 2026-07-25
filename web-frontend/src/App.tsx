@@ -296,6 +296,7 @@ function TrainTab() {
   const [name, setName] = useState('')
   const [files, setFiles] = useState<File[]>([])
   const [previews, setPreviews] = useState<string[]>([])
+  const [promptsText, setPromptsText] = useState('')
   const [epochs, setEpochs] = useState(50)
   const [steps, setSteps] = useState(9)
   const [training, setTraining] = useState(false)
@@ -328,6 +329,15 @@ function TrainTab() {
     try {
       const images_b64 = await Promise.all(files.map(readFileAsBase64))
       setStatus('Submitting training job…')
+
+      const body: Record<string, unknown> = { name: name.trim(), images: images_b64, num_epochs: epochs, steps }
+      // Parse comma-separated prompts if provided
+      if (promptsText.trim()) {
+        const prompts = promptsText.split(',').map(s => s.trim()).filter(Boolean)
+        if (prompts.length === files.length) {
+          body.prompts = prompts
+        }
+      }
 
       const res = await fetch(`${INFERENCE_API}/train`, {
         method: 'POST',
@@ -417,7 +427,22 @@ function TrainTab() {
         )}
       </div>
 
-      {/* Params */}
+      {/* Image captions (optional but recommended for better results) */}
+      <div>
+        <label className="block text-sm font-medium text-gray-300 mb-1">
+          Image prompts <span className="text-gray-500 font-normal">(optional — one per image, comma-separated)</span>
+        </label>
+        <textarea
+          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none text-sm"
+          rows={2} value={promptsText} onChange={e => setPromptsText(e.target.value)}
+          placeholder="a portrait in this style, a landscape in this style, ..."
+          disabled={training}
+        />
+        <p className="text-xs text-gray-500 mt-1">
+          Describing each image helps the model learn faster. Leave blank for style-only training.
+        </p>
+      </div>
+
       <div className="flex gap-4">
         <div className="w-24">
           <label className="block text-xs font-medium text-gray-400 mb-1">Epochs</label>
