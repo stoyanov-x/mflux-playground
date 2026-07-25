@@ -57,40 +57,44 @@ class JobWorker:
             return self._queue.pop(0)
 
     def _process(self, job_id: str) -> None:
-        job = self._store.get_job(job_id)
-        if job is None:
-            return
-
-        # Check if cancelled while queued
-        if job.get("status") == "cancelled":
-            logger.info("job_cancelled_while_queued", job_id=job_id)
-            return
-
-        self._store.update_job(job_id, status=JobStatus.running.value, progress=0.0)
-        logger.info("job_started", job_id=job_id, type=job.get("type", "generate"))
-
         try:
-            req = self._store.get_params(job_id) or {}
+            job = self._store.get_job(job_id)
+            if job is None:
+                return
 
-            # Dispatch: training vs generation
-            if req.get("type") == "train":
-                self._run_training(job_id, req)
-            else:
-                self._run_generation(job_id, req)
+            # Check if cancelled while queued
+            if job.get("status") == "cancelled":
+                logger.info("job_cancelled_while_queued", job_id=job_id)
+                return
 
-        except StopImageGenerationException:
-            logger.info("job_cancelled", job_id=job_id)
-            self._store.update_job(
-                job_id,
-                status=JobStatus.cancelled.value,
-            )
-        except Exception as exc:
-            logger.error("job_failed", job_id=job_id, error=str(exc))
-            self._store.update_job(
-                job_id,
-                status=JobStatus.failed.value,
-                error=str(exc),
-            )
+            self._store.update_job(job_id, status=JobStatus.running.value, progress=0.0)
+            logger.info("job_started", job_id=job_id, type=job.get("type", "generate"))
+
+            try:
+                req = self._store.get_params(job_id) or {}
+
+                # Dispatch: training vs generation
+                if req.get("type") == "train":
+                    self._run_training(job_id, req)
+                else:
+                    self._run_generation(job_id, req)
+
+            except StopImageGenerationException:
+                logger.info("job_cancelled", job_id=job_id)
+                self._store.update_job(
+                    job_id,
+                    status=JobStatus.cancelled.value,
+                )
+            except Exception as exc:
+                logger.exception("job_failed", job_id=job_id, error=str(exc))
+                self._store.update_job(
+                    job_id,
+                    status=JobStatus.failed.value,
+                    error=str(exc),
+                )
+        except BaseException as exc:
+            # Last-resort catch — prevents the entire worker from dying
+            logger.exception("worker_crashed", job_id=job_id, error=str(exc))
 
     def _run_generation(self, job_id: str, req: dict) -> None:
         # Log warning if a different model was requested (not supported per-request)
