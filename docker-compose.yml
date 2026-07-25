@@ -1,19 +1,28 @@
-# ──────────────────────────────────────────────────────────────
-#  mflux Experiment — local dev stack
-# ──────────────────────────────────────────────────────────────
-#  The inference service (mflux + MLX) only runs on Apple Silicon
-#  and is started outside Docker for real inference.
-#  This compose file is for the supporting services locally,
-#  and documents how the cloud deployment would look.
+# ══════════════════════════════════════════════════════════════
+#  mflux Experiment — Docker Compose
+# ══════════════════════════════════════════════════════════════
 #
-#  Local dev workflow:
-#    Terminal 1: cd inference-service && uv run uvicorn app.main:app --reload
-#    Terminal 2: cd web-api && dotnet run
-#    Terminal 3: cd web-frontend && npm run dev
-# ──────────────────────────────────────────────────────────────
+# ── Why three terminals? ─────────────────────────────────────
+# The inference service (mflux + MLX) talks to Apple's Metal GPU
+# framework.  Docker for Mac runs a Linux VM which has no access
+# to the Metal GPU — so the inference service CANNOT run inside
+# Docker on macOS.
+#
+# ── Local dev workflow (Mac) ─────────────────────────────────
+#   Terminal 1 (native):  cd inference-service && uv run uvicorn ...
+#   Terminal 2 (Docker):  docker compose up web-api frontend
+#   Terminal 3 (Docker):  (optional, can skip if using compose)
+#
+# ── Cloud deployment (Linux) ─────────────────────────────────
+# On a cloud Linux host with an NVIDIA GPU, all three services
+# can run in Docker.  Replace inference-service with a CUDA image
+# (diffusers, ComfyUI) implementing the same API contract.
+#
+# ══════════════════════════════════════════════════════════════
 
 services:
   # ── Web API (ASP.NET Core) ─────────────────────────────────
+  # Can run in Docker on any platform — no GPU needed.
   web-api:
     build:
       context: ./web-api
@@ -21,36 +30,22 @@ services:
     ports:
       - "5100:8080"
     environment:
-      - InferenceBaseUrl=http://inference-service:8000
+      # Point at the natively-running inference service on the Mac host.
+      # macOS: host.docker.internal resolves to the Mac itself.
+      # Linux: replace with the actual host IP or service name.
+      - InferenceBaseUrl=http://host.docker.internal:8000
       - ASPNETCORE_ENVIRONMENT=Development
-    depends_on:
-      - inference-service
-    # In production, add Redis/Postgres here.
-
-  # ── Inference Service (FastAPI + mflux) ────────────────────
-  # NOTE: Only works on Apple Silicon hosts due to MLX dependency.
-  inference-service:
-    build:
-      context: ./inference-service
-      dockerfile: Dockerfile
-    ports:
-      - "8000:8000"
-    environment:
-      - MFLUX_MODEL_ALIAS=dev
-      - MFLUX_DEFAULT_NUM_STEPS=25
-      - MFLUX_QUANTIZE=8
+    # ── Model weights ────────────────────────────────────────
+    # mlx downloads Flux model weights (~25 GB) on first run to
+    # ~/.cache/huggingface/.  Docker containers don't share this
+    # cache.  So even if MLX *could* run inside Docker on Mac
+    # (it can't), you'd re-download the 25 GB every time.
+    #
+    # ── Persistence ──────────────────────────────────────────
+    # Path resolves to /data/mflux_jobs.db inside the container
+    # (AppContext.BaseDirectory is /app/, then ../../.. goes to /).
     volumes:
-      - ./inference-service/lora_weights:/app/lora_weights
-    # On cloud GPU targets, replace this service with a CUDA-based
-    # image running diffusers or ComfyUI with the same API contract.
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: cdi
-              capabilities: [gpu]
-    profiles:
-      - local-mac    # Only enabled when explicitly profiled
+      - mflux_data:/data
 
   # ── Frontend (Vite + React) ────────────────────────────────
   frontend:
@@ -61,3 +56,6 @@ services:
       - "5173:80"
     depends_on:
       - web-api
+
+volumes:
+  mflux_data:

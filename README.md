@@ -45,39 +45,69 @@ Three services, designed so the **inference backend is swappable** without touch
 
 ## Quick Start (Local Dev)
 
+### ⚠️ Docker limitation on Mac
+
+The inference service (mflux) uses **MLX**, which talks directly to Apple's **Metal GPU** framework. Docker for Mac runs inside a Linux VM — it has **no access to the Metal GPU**, so the inference service **cannot run in Docker on macOS**.
+
+The supporting services (web API, frontend) work fine in Docker. The recommended local workflow is a **hybrid**: inference natively, everything else in Docker.
+
 ### Prerequisites
 - Python 3.12+ with [`uv`](https://docs.astral.sh/uv/) (or pip)
-- .NET 9 SDK
-- Node.js 22+
+- .NET 9 SDK *(only if running web API natively)*
+- Node.js 22+ *(only if running frontend natively)*
 - Apple Silicon Mac (for mflux inference)
+- Docker Desktop *(optional — only for hybrid mode)*
 
-### Terminal 1 — Inference Service
+### Option A: Hybrid (inference native, supporting services in Docker)
+
+**Terminal 1 — Inference (native):**
 ```bash
 cd inference-service
-
-# Install deps
 uv sync
+uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+The first startup downloads the Flux model weights (~25 GB one-time download).
 
-# Start the FastAPI server
+**Terminal 2 — Everything else (Docker):**
+```bash
+docker compose up --build web-api frontend
+```
+
+Open **http://localhost:5173**.
+
+### Option B: All native (three terminals)
+
+**Terminal 1 — Inference:**
+```bash
+cd inference-service
+uv sync
 uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-The first startup downloads the Flux model weights. This is a one-time ~25 GB download.
-
-### Terminal 2 — Web API
+**Terminal 2 — Web API:**
 ```bash
 cd web-api
 dotnet run --urls "http://localhost:5100"
 ```
 
-### Terminal 3 — Frontend
+**Terminal 3 — Frontend:**
 ```bash
 cd web-frontend
 npm install
 npm run dev
 ```
 
-Open **http://localhost:5173** in your browser.
+Open **http://localhost:5173**.
+
+### Cloud deployment (Linux + NVIDIA GPU)
+
+On a cloud Linux host, all three services run in Docker. Replace the inference
+service with a CUDA-based image (diffusers, ComfyUI) implementing the same
+[API contract](shared/API_CONTRACT.md).
+
+```bash
+docker compose up --build
+```
 
 ---
 
