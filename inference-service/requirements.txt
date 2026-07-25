@@ -12,6 +12,9 @@ pydantic-settings>=2.7.0
 # Image handling
 Pillow>=11.0.0
 
+# Async SQLite (used in async endpoints; stdlib sqlite3 for sync worker)
+aiosqlite>=0.20.0
+
 # Async job queue support
 httpx>=0.28.0
 

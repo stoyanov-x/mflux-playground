@@ -64,13 +64,7 @@ class JobWorker:
         logger.info("job_started", job_id=job_id)
 
         try:
-            # Retrieve the original params
-            params = {}  # In a real impl we'd store params alongside
-
-            # For now, re-pull from store internals — simplified
-            # In production, store the params dict with the job record.
-            raw = self._store._jobs.get(job_id, {})
-            req = raw.get("params", {})
+            req = self._store.get_params(job_id) or {}
 
             image, seed, elapsed = self._engine.generate(
                 prompt=req.get("prompt", ""),

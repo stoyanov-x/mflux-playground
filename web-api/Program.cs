@@ -1,6 +1,16 @@
+using Microsoft.EntityFrameworkCore;
+using MfluxExperiment.WebApi.Data;
 using MfluxExperiment.WebApi.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// ── Database ────────────────────────────────────────────────
+
+var dbPath = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "data", "mflux_jobs.db");
+Directory.CreateDirectory(Path.GetDirectoryName(dbPath)!);
+
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseSqlite($"Data Source={dbPath}"));
 
 // ── Services ────────────────────────────────────────────────
 
@@ -16,8 +26,8 @@ builder.Services.AddHttpClient<IInferenceClient, MfluxInferenceClient>(client =>
     client.Timeout = TimeSpan.FromMinutes(5); // generations can be slow
 });
 
-// In-memory job tracker (swap for DB-backed in production).
-builder.Services.AddSingleton<GenerationJobService>();
+// SQLite-backed job tracker (swap for Postgres/Redis in production).
+builder.Services.AddScoped<GenerationJobService>();
 
 // ── CORS ────────────────────────────────────────────────────
 
@@ -34,6 +44,13 @@ builder.Services.AddCors(options =>
 // ── Pipeline ────────────────────────────────────────────────
 
 var app = builder.Build();
+
+// Auto-create tables on startup.
+using (var scope = app.Services.CreateScope())
+{
+    var ctx = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    ctx.Database.EnsureCreated();
+}
 
 if (app.Environment.IsDevelopment())
 {

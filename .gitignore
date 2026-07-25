@@ -26,6 +26,10 @@ dist/
 lora_weights/*.safetensors
 generated_images/
 
+# SQLite databases (created at runtime)
+data/
+**/data/
+
 # Environment
 .env
 .env.local

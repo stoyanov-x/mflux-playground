@@ -25,7 +25,7 @@ public class GenerationController : ControllerBase
     public async Task<ActionResult<object>> Submit([FromBody] GenerationRequest request)
     {
         var inferenceResponse = await _inference.SubmitGenerationAsync(request);
-        var record = _jobs.CreateJob(inferenceResponse.JobId, request.Prompt);
+        var record = await _jobs.CreateJobAsync(inferenceResponse.JobId, request.Prompt);
 
         return Accepted(new
         {
@@ -41,14 +41,14 @@ public class GenerationController : ControllerBase
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<object>> GetStatus(Guid id)
     {
-        var record = _jobs.GetJob(id);
+        var record = await _jobs.GetJobAsync(id);
         if (record is null) return NotFound();
 
         // Sync status from the inference service.
         var remote = await _inference.GetJobStatusAsync(record.InferenceJobId);
         if (remote is not null)
         {
-            _jobs.UpdateFromInference(id, remote);
+            await _jobs.UpdateFromInferenceAsync(id, remote);
         }
 
         return Ok(new
@@ -68,7 +68,7 @@ public class GenerationController : ControllerBase
     [HttpGet("{id:guid}/image")]
     public async Task<IActionResult> GetImage(Guid id)
     {
-        var record = _jobs.GetJob(id);
+        var record = await _jobs.GetJobAsync(id);
         if (record is null) return NotFound();
         if (record.Status != "completed")
             return BadRequest("Job not yet completed");
