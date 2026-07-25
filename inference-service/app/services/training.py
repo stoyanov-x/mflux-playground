@@ -9,10 +9,8 @@ from __future__ import annotations
 
 import base64
 import io
-import json
 import os
 import shutil
-import tempfile
 import time
 from pathlib import Path
 
@@ -158,13 +156,14 @@ def run_training(
         img = Image.open(io.BytesIO(raw)).convert("RGB")
         img.save(data_dir / f"{i:04d}.png")
 
-    # 4. Write prompt captions if provided
+    # 4. Write prompt captions — mflux requires a .txt file per image
     if prompts:
-        captions_file = data_dir / "metadata.jsonl"
-        with open(captions_file, "w") as f:
-            for i, prompt in enumerate(prompts):
-                json.dump({"image": f"{i:04d}.png", "prompt": prompt}, f)
-                f.write("\n")
+        for i, prompt in enumerate(prompts):
+            (data_dir / f"{i:04d}.txt").write_text(prompt, encoding="utf-8")
+    else:
+        # Write empty prompt files so mflux's data discovery doesn't fail
+        for i in range(len(images_b64)):
+            (data_dir / f"{i:04d}.txt").write_text("", encoding="utf-8")
 
     # 5. Write training config
     config = build_training_config(
@@ -195,9 +194,7 @@ def run_training(
     from mflux.models.common.training.runner import TrainingRunner
 
     try:
-        adapter, spec = TrainingRunner.train(
-            config_path=str(config_path), resume_path=None
-        )
+        adapter, spec = TrainingRunner.train(config_path=str(config_path), resume_path=None)
 
         # 6. Find the latest checkpoint and extract the LoRA safetensors
         checkpoints_dir = job_dir / "checkpoints"
@@ -211,9 +208,7 @@ def run_training(
         output_file = TRAINING_DIR / f"{prefixed_name}.safetensors"
         with zipfile.ZipFile(latest_zip, "r") as zf:
             # Find the adapter safetensors inside the zip
-            adapter_names = [
-                n for n in zf.namelist() if n.endswith("_adapter.safetensors")
-            ]
+            adapter_names = [n for n in zf.namelist() if n.endswith("_adapter.safetensors")]
             if not adapter_names:
                 raise RuntimeError(f"No adapter safetensors found in {latest_zip}")
             with zf.open(adapter_names[0]) as src, open(output_file, "wb") as dst:

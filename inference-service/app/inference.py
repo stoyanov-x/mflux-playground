@@ -141,7 +141,7 @@ class InferenceEngine:
         # Limit MLX GPU memory cache
         if settings.mlx_cache_limit_gb is not None:
             try:
-                mx.set_cache_limit(settings.mlx_cache_limit_gb * 1024 * 1024 * 1024)
+                mx.set_cache_limit(int(settings.mlx_cache_limit_gb * 1024 * 1024 * 1024))
                 logger.info("mlx_cache_limit_set", gb=settings.mlx_cache_limit_gb)
             except Exception as exc:
                 logger.warning("mlx_cache_limit_failed", error=str(exc))
