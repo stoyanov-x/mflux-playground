@@ -39,4 +39,7 @@ training/
 .env
 .env.local
 
+.ruff_cache/
 .mypy_cache/
+.pyright/
+

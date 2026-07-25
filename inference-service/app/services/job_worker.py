@@ -12,11 +12,11 @@ import io
 import threading
 
 import structlog
+from mflux.utils.exceptions import StopImageGenerationException
 
 from app.inference import InferenceEngine
 from app.models import JobStatus
 from app.services.job_store import JobStore, get_job_store
-from mflux.utils.exceptions import StopImageGenerationException
 
 logger = structlog.get_logger(__name__)
 

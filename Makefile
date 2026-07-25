@@ -1,4 +1,4 @@
-.PHONY: dev inference api frontend hybrid clean setup
+.PHONY: dev inference api frontend hybrid clean setup setup-dev lint format check ruff pyright
 
 # ── Quick-start ──────────────────────────────────────────────
 #   Three-terminals (recommended for Mac local dev):
@@ -53,9 +53,38 @@ setup:
 	cd inference-service && uv sync
 	cd web-frontend && npm install
 
+## Setup dev environment (deps + pre-commit hooks)
+setup-dev: setup
+	brew list pre-commit &>/dev/null || brew install pre-commit
+	pre-commit install --hook-type pre-commit --hook-type pre-push
+	@echo "✅ pre-commit hooks installed"
+
 ## Lint all shell scripts with shellcheck
 lint:
 	shellcheck start.sh shutdown.sh
+
+## Python lint (ruff)
+ruff:
+	cd inference-service && uv run ruff check
+
+## Python type check (pyright)
+pyright:
+	cd inference-service && uv run pyright
+
+## Python format check (ruff format)
+format-py:
+	cd inference-service && uv run ruff format
+
+## C# format check
+format-cs:
+	cd web-api && dotnet format --verify-no-changes
+
+## Run all quality checks locally
+check: lint ruff pyright
+	cd web-frontend && npx tsc -b
+	cd web-api && dotnet build --configuration Release
+	@echo ""
+	@echo "✅ All checks passed"
 
 ## Clean generated artifacts
 clean:

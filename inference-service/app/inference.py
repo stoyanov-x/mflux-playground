@@ -189,6 +189,7 @@ class InferenceEngine:
             def call_in_loop(self, t: int, **kwargs) -> None:
                 if self._event.is_set():
                     from mflux.utils.exceptions import StopImageGenerationException
+
                     raise StopImageGenerationException("Cancelled by user")
 
         self._cancel_event.clear()

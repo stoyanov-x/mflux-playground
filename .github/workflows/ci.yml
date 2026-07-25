@@ -1,0 +1,275 @@
+# ══════════════════════════════════════════════════════════════
+#  mflux Experiment — CI Pipeline
+# ══════════════════════════════════════════════════════════════
+#  Runs on every push (any branch) and PR.
+#  Covers all three services plus quality checks.
+# ══════════════════════════════════════════════════════════════
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  merge_group:
+
+permissions:
+  contents: read
+
+# ── Global defaults ─────────────────────────────────────────
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+# ── Concurrency ─────────────────────────────────────────────
+# Cancel in-progress runs for the same branch (not for main).
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  # ══════════════════════════════════════════════════════════
+  #  Pre-check: detect what changed
+  # ══════════════════════════════════════════════════════════
+  changes:
+    runs-on: ubuntu-24.04
+    outputs:
+      python: ${{ steps.filter.outputs.python }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      dotnet: ${{ steps.filter.outputs.dotnet }}
+      shell: ${{ steps.filter.outputs.shell }}
+      docker: ${{ steps.filter.outputs.docker }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            python:
+              - 'inference-service/**'
+              - 'requirements*.txt'
+              - 'pyproject.toml'
+            frontend:
+              - 'web-frontend/**'
+              - 'package*.json'
+            dotnet:
+              - 'web-api/**'
+              - '*.sln'
+              - '*.csproj'
+            shell:
+              - '*.sh'
+              - 'Makefile'
+            docker:
+              - '**/Dockerfile'
+              - 'docker-compose*.yml'
+              - '.dockerignore'
+
+  # ══════════════════════════════════════════════════════════
+  #  Python — inference service
+  # ══════════════════════════════════════════════════════════
+  python-lint:
+    needs: changes
+    if: ${{ needs.changes.outputs.python == 'true' || github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: inference-service
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-suffix: python-lint
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --only-dev
+
+      - name: Ruff lint
+        run: uv run ruff check --output-format=github
+
+      - name: Ruff format check
+        run: uv run ruff format --check
+
+  python-typecheck:
+    needs: changes
+    if: ${{ needs.changes.outputs.python == 'true' || github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: inference-service
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-suffix: python-typecheck
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install all dependencies
+        run: uv sync
+
+      - name: pyright type check
+        run: uv run pyright
+
+  # ══════════════════════════════════════════════════════════
+  #  Frontend — TypeScript / React / Vite
+  # ══════════════════════════════════════════════════════════
+  frontend-lint:
+    needs: changes
+    if: ${{ needs.changes.outputs.frontend == 'true' || github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: web-frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web-frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript type check
+        run: npx tsc -b
+
+      - name: Build
+        run: npm run build
+
+  # ══════════════════════════════════════════════════════════
+  #  .NET — web API
+  # ══════════════════════════════════════════════════════════
+  dotnet-build:
+    needs: changes
+    if: ${{ needs.changes.outputs.dotnet == 'true' || github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: web-api
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Format check
+        run: dotnet format --verify-no-changes --no-restore
+
+  # ══════════════════════════════════════════════════════════
+  #  Shell scripts — shellcheck
+  # ══════════════════════════════════════════════════════════
+  shellcheck:
+    needs: changes
+    if: ${{ needs.changes.outputs.shell == 'true' || github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ShellCheck
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: "."
+          severity: style
+          additional_files: "start.sh shutdown.sh"
+
+  # ══════════════════════════════════════════════════════════
+  #  Docker — smoke test all images build
+  # ══════════════════════════════════════════════════════════
+  docker-build:
+    needs: changes
+    if: ${{ needs.changes.outputs.docker == 'true' || github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - name: web-api
+            context: web-api
+            dockerfile: web-api/Dockerfile
+          - name: frontend
+            context: web-frontend
+            dockerfile: web-frontend/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build ${{ matrix.service.name }}
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.service.context }}
+          file: ${{ matrix.service.dockerfile }}
+          push: false
+          tags: mflux-experiment/${{ matrix.service.name }}:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ══════════════════════════════════════════════════════════
+  #  Status check — single required check for branch protection
+  # ══════════════════════════════════════════════════════════
+  ci-passed:
+    if: ${{ always() }}
+    needs:
+      - python-lint
+      - python-typecheck
+      - frontend-lint
+      - dotnet-build
+      - shellcheck
+      - docker-build
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          echo "## CI Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '| Job | Status |' >> $GITHUB_STEP_SUMMARY
+          echo '|-----|--------|' >> $GITHUB_STEP_SUMMARY
+          for job in python-lint python-typecheck frontend-lint dotnet-build shellcheck docker-build; do
+            result=$(echo '${{ toJSON(needs) }}' | jq -r --arg j "$job" '.[$j].result // "skipped"')
+            icon="✅"
+            [ "$result" = "failure" ] && icon="❌"
+            [ "$result" = "cancelled" ] && icon="⏹️"
+            [ "$result" = "skipped" ] && icon="⏭️"
+            echo "| $job | $icon $result |" >> $GITHUB_STEP_SUMMARY
+          done
+          echo "" >> $GITHUB_STEP_SUMMARY
+        shell: bash
+      - name: Check for failures
+        run: |
+          for job in python-lint python-typecheck frontend-lint dotnet-build shellcheck docker-build; do
+            result=$(echo '${{ toJSON(needs) }}' | jq -r --arg j "$job" '.[$j].result // "skipped"')
+            if [ "$result" = "failure" ]; then
+              echo "❌ $job failed"
+              exit 1
+            fi
+          done
+          echo "✅ All checks passed"
+        shell: bash

@@ -1,0 +1,75 @@
+# ══════════════════════════════════════════════════════════════
+#  pre-commit hooks — local quality gates
+# ══════════════════════════════════════════════════════════════
+#
+#  Install:  brew install pre-commit && pre-commit install
+#  Install pre-push:  pre-commit install --hook-type pre-push
+#  Run all:   pre-commit run --all-files
+#
+#  Hooks run on staged files only (fast) by default.
+#  TruffleHog runs as a pre-push hook (noisier but catches
+#  secrets before they reach the remote).
+# ══════════════════════════════════════════════════════════════
+
+default_install_hook_types:
+  - pre-commit
+  - pre-push
+
+default_stages:
+  - pre-commit
+  - pre-push
+
+repos:
+  # ── General: trailing whitespace, EOF newlines, YAML ──────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      - id: check-merge-conflict
+      - id: detect-private-key
+
+  # ── Shell scripts ─────────────────────────────────────────
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        args: [--severity=style]
+        files: \.sh$
+
+  # ── Python: ruff lint + format ────────────────────────────
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.0
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+        files: ^inference-service/
+      - id: ruff-format
+        files: ^inference-service/
+
+  # ── .NET: dotnet format ──────────────────────────────────
+  # Runs `dotnet format` on C# files in web-api/.
+  - repo: local
+    hooks:
+      - id: dotnet-format
+        name: dotnet format
+        entry: dotnet format
+        language: system
+        pass_filenames: false
+        files: ^web-api/.*\.cs$
+        types_or: [c#]
+
+  # ── Secrets: TruffleHog (pre-push only) ──────────────────
+  # Scans the diff against the remote branch for secrets.
+  - repo: local
+    hooks:
+      - id: trufflehog
+        name: TruffleHog secret scan
+        description: Scan for secrets before pushing
+        entry: bash -c 'trufflehog git --no-update --only-verified --fail file://. --since-commit HEAD'
+        language: system
+        stages: [pre-push]
+        pass_filenames: false

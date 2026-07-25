@@ -23,8 +23,8 @@ from app.config import settings
 
 logger = structlog.get_logger(__name__)
 
-# Training output directory
-TRAINING_DIR = Path(settings.training_dir)
+# Training output directory (absolute — prevents mflux from double-resolving relative paths)
+TRAINING_DIR = Path(settings.training_dir).resolve()
 TRAINING_DIR.mkdir(parents=True, exist_ok=True)
 
 # Default training config template (FLUX.2 Klein / Z-Image compatible)

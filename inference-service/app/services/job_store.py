@@ -135,8 +135,9 @@ class JobStore:
                 job = dict(r)
                 # Extract prompt from params_json
                 params = json.loads(job.pop("params_json") or "{}")
-                job["prompt"] = (params.get("prompt") or
-                                 params.get("name") or "[training job]")
+                job["prompt"] = (
+                    params.get("prompt") or params.get("name") or "[training job]"
+                )
                 result.append(job)
             return result
 
