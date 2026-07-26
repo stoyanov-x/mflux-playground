@@ -185,6 +185,26 @@ Set via `.env` or environment variables (prefix `MFLUX_`):
 
 ---
 
+## Secret Scanning (TruffleHog)
+
+TruffleHog runs automatically in CI on every push/PR to `main` and weekly as a full-history scan.
+
+### Local usage
+
+```bash
+# Scan the whole repo
+make trufflehog
+
+# Or via pre-commit (scans staged files before push)
+make setup-dev    # one-time setup — installs pre-commit + TruffleHog
+git add . && git commit -m "..."   # pre-commit hooks run
+git push                            # pre-push hook runs TruffleHog
+```
+
+The pre-push hook uses `--only-verified` to avoid noise. To bypass it for a false positive: `git push --no-verify`.
+
+---
+
 ## Cloud Portability
 
 The `IInferenceClient` interface in the web API is the swap point.

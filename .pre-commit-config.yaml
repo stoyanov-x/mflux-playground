@@ -48,6 +48,14 @@ repos:
         args: [--fix, --exit-non-zero-on-fix]
         files: ^inference-service/
       - id: ruff-format
+
+  # ── Secret scanning (pre-push only — too noisy for pre-commit) ─
+  - repo: https://github.com/trufflesecurity/trufflehog
+    rev: v3.88.22
+    hooks:
+      - id: trufflehog
+        stages: [pre-push]
+        args: [--only-verified, --fail, --no-update]
         files: ^inference-service/
 
   # ── .NET: dotnet format ──────────────────────────────────

@@ -59,6 +59,13 @@ setup-dev: setup
 	pre-commit install --hook-type pre-commit --hook-type pre-push
 	@echo "✅ pre-commit hooks installed"
 
+## Run TruffleHog secret scanning on the full repo
+trufflehog:
+	@echo "🔍 Installing TruffleHog if missing…"
+	@which trufflehog >/dev/null 2>&1 || brew install trufflehog
+	@echo "🔍 Scanning $(PWD) for secrets…"
+	trufflehog filesystem --only-verified --fail --no-update "$(PWD)"
+
 ## Lint all shell scripts with shellcheck
 lint:
 	shellcheck start.sh shutdown.sh
