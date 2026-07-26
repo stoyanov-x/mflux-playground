@@ -77,7 +77,7 @@ def _load_model_instance(model_alias: str, quantize: int | None, lora_paths: lis
 
     # Z-Image family
     if model_alias.startswith("z-image"):
-        from mflux.models.z_image.variants.txt2img.z_image import ZImage
+        from mflux.models.z_image.variants.z_image import ZImage
 
         return ZImage(
             model_config=model_config,

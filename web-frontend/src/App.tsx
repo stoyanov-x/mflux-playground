@@ -78,7 +78,7 @@ export default function App() {
 function GenerateTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
   const [prompt, setPrompt] = useState('')
   const [negativePrompt, setNegativePrompt] = useState('')
-  const [steps, setSteps] = useState(25)
+  const [steps, setSteps] = useState(6)
   const [guidance, setGuidance] = useState(3.5)
   const [loras, setLoras] = useState<LoraInfo[]>([])
   const [selectedLoras, setSelectedLoras] = useState<string[]>([])

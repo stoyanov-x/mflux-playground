@@ -38,6 +38,7 @@ training/
 # Environment
 .env
 .env.local
+.env.*
 
 .ruff_cache/
 .mypy_cache/
