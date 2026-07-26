@@ -1,5 +1,11 @@
 # mflux Experiment
 
+[![CI](https://github.com/stoyanov-x/mflux-playground/actions/workflows/ci.yml/badge.svg)](https://github.com/stoyanov-x/mflux-playground/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](inference-service/pyproject.toml)
+
+> **Status**: Active development. Stable for local use on Apple Silicon.
+
 Flux image generation on Apple Silicon, with a cloud-portable architecture.
 
 ## Architecture
@@ -19,6 +25,8 @@ Flux image generation on Apple Silicon, with a cloud-portable architecture.
 ```
 
 Three services, designed so the **inference backend is swappable** without touching the web API or frontend.
+
+📖 **See also**: [Contributing guide](CONTRIBUTING.md) · [Changelog](CHANGELOG.md) · [API contract](shared/API_CONTRACT.md)
 
 ---
 
@@ -140,6 +148,28 @@ curl -X POST http://localhost:8000/api/v1/generate \
                      └─────────┘              │  └ LoRA store (files)   │
                                               └─────────────────────────┘
 ```
+
+---
+
+## Development
+
+### Quality gates
+
+```bash
+make check
+```
+
+Runs Ruff lint + format, Pyright type checking, TypeScript build, .NET build, and shellcheck in one command.
+
+### Pre-commit hooks
+
+```bash
+make setup-dev    # one-time: installs deps + pre-commit hooks
+```
+
+Hooks run automatically on `git commit` (lint, format, whitespace checks) and `git push` (also runs TruffleHog secret scanning).
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ---
 
