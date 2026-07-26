@@ -15,6 +15,10 @@ export default defineConfig({
         target: 'http://localhost:8000',
         changeOrigin: true,
       },
+      '/health': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
       '/api/v1': {
         target: 'http://localhost:8000',
         changeOrigin: true,

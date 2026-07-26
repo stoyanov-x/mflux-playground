@@ -15,6 +15,12 @@ type Job = {
   createdAt: string
 }
 
+type HealthInfo = {
+  model_alias: string
+  quantize: number | null
+  lora_loaded: string[]
+}
+
 // ── Helpers ────────────────────────────────────────────────
 
 const INFERENCE_API = '/api/v1'
@@ -35,14 +41,29 @@ function readFileAsBase64(file: File): Promise<string> {
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('generate')
+  const [health, setHealth] = useState<HealthInfo | null>(null)
+
+  // Fetch model info on mount
+  useEffect(() => {
+    fetch('/health')
+      .then(r => r.json())
+      .then(setHealth)
+      .catch(() => {})
+  }, [])
+
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
       <div className="max-w-4xl mx-auto px-4 py-6">
         {/* Header */}
         <header className="mb-6 flex items-center justify-between">
-          <div>
+          <div className="flex items-center gap-3">
             <h1 className="text-3xl font-bold">mflux</h1>
-            <p className="text-gray-400 text-sm mt-0.5">Image generation on Apple Silicon</p>
+            {health && (
+              <span className="bg-blue-900/40 text-blue-300 text-xs font-mono px-2.5 py-1 rounded-md border border-blue-800/50">
+                {health.model_alias}{health.quantize ? ` (${health.quantize}-bit)` : ''}
+              </span>
+            )}
+            <p className="text-gray-400 text-sm mt-0.5 hidden sm:block">Image generation on Apple Silicon</p>
           </div>
         </header>
 
@@ -63,7 +84,7 @@ export default function App() {
           ))}
         </div>
 
-        {tab === 'generate' && <GenerateTab onNavigate={setTab} />}
+        {tab === 'generate' && <GenerateTab onNavigate={setTab} health={health} />}
         {tab === 'train' && <TrainTab />}
         {tab === 'history' && <HistoryTab />}
       </div>
@@ -72,10 +93,43 @@ export default function App() {
 }
 
 // ═══════════════════════════════════════════════════════════════
+//  Info Tooltip
+// ═══════════════════════════════════════════════════════════════
+
+function InfoTooltip({ label, details }: { label: string; details: string[] }) {
+  const [show, setShow] = useState(false)
+  return (
+    <span className="relative inline-flex items-center">
+      <span
+        className="cursor-help text-gray-500 hover:text-gray-300 transition-colors text-sm ml-1"
+        onMouseEnter={() => setShow(true)}
+        onMouseLeave={() => setShow(false)}
+        onClick={() => setShow(v => !v)}
+      >
+        ⓘ
+      </span>
+      {show && (
+        <>
+          <div className="fixed inset-0 z-10 sm:hidden" onClick={() => setShow(false)} />
+          <div className="absolute z-20 bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg shadow-xl min-w-[200px]"
+               onMouseEnter={() => setShow(true)}
+               onMouseLeave={() => setShow(false)}>
+            <p className="text-xs font-medium text-gray-400 mb-1.5">{label}</p>
+            {details.map((d, i) => (
+              <p key={i} className="text-xs text-gray-200 whitespace-nowrap">{d}</p>
+            ))}
+          </div>
+        </>
+      )}
+    </span>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════
 //  Generate Tab
 // ═══════════════════════════════════════════════════════════════
 
-function GenerateTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
+function GenerateTab({ onNavigate, health }: { onNavigate: (tab: Tab) => void; health: HealthInfo | null }) {
   const [prompt, setPrompt] = useState('')
   const [negativePrompt, setNegativePrompt] = useState('')
   const [steps, setSteps] = useState(6)
@@ -231,9 +285,20 @@ function GenerateTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
       </div>
 
       {/* Parameters row */}
-      <div className="flex gap-4 flex-wrap">
+      <div className="flex gap-4 flex-wrap items-end">
         <div className="w-24">
-          <label className="block text-xs font-medium text-gray-400 mb-1">Steps</label>
+          <label className="block text-xs font-medium text-gray-400 mb-1">
+            Steps
+            <InfoTooltip
+              label="Generation parameters"
+              details={[
+                `Model: ${health?.model_alias ?? '—'}`,
+                `Quantize: ${health?.quantize != null ? `${health.quantize}-bit` : 'none'}`,
+                `Guidance: ${guidance}`,
+                `Image size: 1024 × 1024`,
+              ]}
+            />
+          </label>
           <input type="number" min={1} max={50} value={steps}
             onChange={e => setSteps(Number(e.target.value))}
             className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"

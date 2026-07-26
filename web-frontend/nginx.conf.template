@@ -7,6 +7,14 @@ server {
     # Allow large training image uploads (base64, 30 images ~150 MB)
     client_max_body_size 500M;
 
+    # Health endpoint — exposed so the frontend can show model info
+    location /health {
+        proxy_pass ${INFERENCE_API_URL};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
     # API proxy to inference service
     # INFERENCE_API_URL — set via env var (default: http://host.docker.internal:8000 on Mac)
     # Note: no trailing slash on proxy_pass — preserves the /api/v1/ prefix
