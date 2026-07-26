@@ -26,14 +26,19 @@ from app.config import settings
 
 logger = structlog.get_logger(__name__)
 
-# Models known to support training in this mflux version
+# Models whose architectures support LoRA training.
+# Derived from which mflux model directories contain a training_adapter/ module.
 TRAINING_CAPABLE_MODELS = {
+    # FLUX.2 Klein family
     "flux2-klein-4b",
     "flux2-klein-9b",
+    "flux2-klein-9b-kv",
     "flux2-klein-base-4b",
     "flux2-klein-base-9b",
+    # Z-Image family
     "z-image",
     "z-image-turbo",
+    # ERNIE-Image family (baidu/ERNIE-Image weights, Flux1-compatible arch)
     "ernie-image",
     "ernie-image-turbo",
 }
@@ -45,13 +50,19 @@ def is_training_capable(model_alias: str) -> bool:
 
 
 def _load_model_instance(model_alias: str, quantize: int | None, lora_paths: list[str] | None):
-    """Dynamically import and construct the right model class for the given alias."""
+    """Dynamically import and construct the right model class for the given alias.
+
+    Each mflux model family lives in its own package under ``mflux.models.*``.
+    The constructor signatures vary: most accept ``(quantize, model_path,
+    lora_paths, lora_scales, model_config)`` but some (FiboVLM, SeedVR2)
+    use a different contract.
+    """
     from mflux.models.common.config import ModelConfig
 
     model_config = ModelConfig.from_name(model_name=model_alias, base_model=None)
     lora_scales = [0.8] * len(lora_paths) if lora_paths else None
 
-    # FLUX.2 family
+    # ── FLUX.2 Klein family ─────────────────────────────────
     if model_alias.startswith("flux2"):
         from mflux.models.flux2.variants.txt2img.flux2_klein import Flux2Klein
 
@@ -63,7 +74,7 @@ def _load_model_instance(model_alias: str, quantize: int | None, lora_paths: lis
             lora_scales=lora_scales,
         ), model_config
 
-    # FLUX.1 family (legacy)
+    # ── FLUX.1 family (dev, schnell, krea-dev) ──────────────
     if model_alias in ("dev", "schnell", "krea-dev", "dev-krea"):
         from mflux.models.flux.variants.txt2img.flux import Flux1
 
@@ -75,7 +86,7 @@ def _load_model_instance(model_alias: str, quantize: int | None, lora_paths: lis
             lora_scales=lora_scales,
         ), model_config
 
-    # Z-Image family
+    # ── Z-Image family ──────────────────────────────────────
     if model_alias.startswith("z-image"):
         from mflux.models.z_image.variants.z_image import ZImage
 
@@ -87,7 +98,74 @@ def _load_model_instance(model_alias: str, quantize: int | None, lora_paths: lis
             lora_scales=lora_scales,
         ), model_config
 
-    # Default: try FLUX.1 (covers ideogram, ernie, qwen, fibo)
+    # ── ERNIE-Image family ──────────────────────────────────
+    if model_alias.startswith("ernie-image"):
+        from mflux.models.ernie_image.variants.txt2img.ernie_image import ErnieImage
+
+        return ErnieImage(
+            model_config=model_config,
+            quantize=quantize,
+            model_path=None,
+            lora_paths=lora_paths,
+            lora_scales=lora_scales,
+        ), model_config
+
+    # ── Ideogram 4 ──────────────────────────────────────────
+    if model_alias.startswith("ideogram"):
+        from mflux.models.ideogram4.variants.txt2img.ideogram4 import Ideogram4
+
+        return Ideogram4(
+            model_config=model_config,
+            quantize=quantize,
+            model_path=None,
+            lora_paths=lora_paths,
+            lora_scales=lora_scales,
+        ), model_config
+
+    # ── Qwen Image family ───────────────────────────────────
+    if model_alias.startswith("qwen-image-edit"):
+        from mflux.models.qwen.variants.edit.qwen_image_edit import QwenImageEdit
+
+        return QwenImageEdit(
+            model_config=model_config,
+            quantize=quantize,
+            model_path=None,
+            lora_paths=lora_paths,
+            lora_scales=lora_scales,
+        ), model_config
+
+    if model_alias.startswith("qwen"):
+        from mflux.models.qwen.variants.txt2img.qwen_image import QwenImage
+
+        return QwenImage(
+            model_config=model_config,
+            quantize=quantize,
+            model_path=None,
+            lora_paths=lora_paths,
+            lora_scales=lora_scales,
+        ), model_config
+
+    # ── FIBO VLM (image editing / VLM) — no LoRA support ───
+    if model_alias.startswith("fibo"):
+        from mflux.models.fibo_vlm.model.fibo_vlm import FiboVLM
+
+        return FiboVLM(
+            model_id=None,
+            model_path=None,
+            quantize=quantize,
+        ), model_config
+
+    # ── SeedVR (upscaling) — no LoRA support ────────────────
+    if model_alias.startswith("seedvr"):
+        from mflux.models.seedvr2 import SeedVR2
+
+        return SeedVR2(
+            model_config=model_config,
+            quantize=quantize,
+            model_path=None,
+        ), model_config
+
+    # ── Default catch-all: try FLUX.1 ───────────────────────
     from mflux.models.flux.variants.txt2img.flux import Flux1
 
     return Flux1(
