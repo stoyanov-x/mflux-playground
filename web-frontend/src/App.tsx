@@ -365,14 +365,12 @@ function GenerateTab({ onNavigate, health }: { onNavigate: (tab: Tab) => void; h
       {resultId && !resultImage && !resultError && (
         <div className="mt-4 space-y-2">
           <p className="text-gray-400 text-sm">
-            Job {resultId.slice(0, 8)}… — {resultProgress > 0 ? `${Math.round(resultProgress * 100)}%` : 'queued'}
+            Job {resultId.slice(0, 8)}… — {Math.round(resultProgress * 100)}%
           </p>
-          {resultProgress > 0 && (
-            <div className="w-full bg-gray-700 rounded-full h-2 overflow-hidden">
-              <div className="bg-blue-500 h-full rounded-full transition-all duration-500"
-                   style={{ width: `${Math.round(resultProgress * 100)}%` }} />
-            </div>
-          )}
+          <div className="w-full bg-gray-700 rounded-full h-2 overflow-hidden">
+            <div className="bg-blue-500 h-full rounded-full transition-all duration-500"
+                 style={{ width: `${Math.round(resultProgress * 100)}%` }} />
+          </div>
         </div>
       )}
     </form>
