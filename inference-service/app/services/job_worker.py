@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import io
 import threading
+import time
 
 import structlog
 from mflux.utils.exceptions import StopImageGenerationException
@@ -107,22 +108,42 @@ class JobWorker:
                 active=self._engine._model_alias,
             )
 
+        # Signal "downloading" before model load, "running" after
+        self._store.update_job(job_id, status=JobStatus.downloading.value, progress=0.0)
+
         # Lazy-load model on the worker thread (MLX GPU streams are thread-local)
         self._engine.load_model(lora_paths=req.get("lora_paths"))
 
-        image, seed, elapsed = self._engine.generate(
-            prompt=req.get("prompt", ""),
-            negative_prompt=req.get("negative_prompt"),
-            lora_paths=req.get("lora_paths"),
-            lora_scales=req.get("lora_scales"),
-            reference_image_b64=req.get("reference_image_b64"),
-            denoise_strength=req.get("denoise_strength", 0.4),
-            num_inference_steps=req.get("num_inference_steps"),
-            height=req.get("height"),
-            width=req.get("width"),
-            seed=req.get("seed"),
-            guidance_scale=req.get("guidance_scale", 3.5),
-        )
+        self._store.update_job(job_id, status=JobStatus.running.value, progress=0.0)
+
+        # Start a daemon thread to poll progress during generation
+        def _poll_progress() -> None:
+            while True:
+                p = self._engine.progress
+                if p > 0.0:
+                    self._store.update_job(job_id, progress=p)
+                time.sleep(0.5)
+
+        poller = threading.Thread(target=_poll_progress, daemon=True)
+        poller.start()
+
+        try:
+            image, seed, elapsed = self._engine.generate(
+                prompt=req.get("prompt", ""),
+                negative_prompt=req.get("negative_prompt"),
+                lora_paths=req.get("lora_paths"),
+                lora_scales=req.get("lora_scales"),
+                reference_image_b64=req.get("reference_image_b64"),
+                denoise_strength=req.get("denoise_strength", 0.4),
+                num_inference_steps=req.get("num_inference_steps"),
+                height=req.get("height"),
+                width=req.get("width"),
+                seed=req.get("seed"),
+                guidance_scale=req.get("guidance_scale", 3.5),
+            )
+        finally:
+            # Ensure progress is finalised even if generation errors
+            self._store.update_job(job_id, progress=1.0)
 
         # Save to disk and store path in DB
         buf = io.BytesIO()
@@ -141,17 +162,12 @@ class JobWorker:
             seed_used=seed,
             elapsed_seconds=round(elapsed, 2),
         )
-        logger.info("job_completed", job_id=job_id, path=image_path, elapsed=f"{elapsed:.2f}s")
-
-        self._store.update_job(
-            job_id,
-            status=JobStatus.completed.value,
-            progress=1.0,
-            result_url=result_url,
-            seed_used=seed,
-            elapsed_seconds=round(elapsed, 2),
+        logger.info(
+            "job_completed",
+            job_id=job_id,
+            path=image_path,
+            elapsed=f"{elapsed:.2f}s",
         )
-        logger.info("job_completed", job_id=job_id, elapsed=f"{elapsed:.2f}s")
 
     def _run_training(self, job_id: str, req: dict) -> None:
         from app.services.training import run_training

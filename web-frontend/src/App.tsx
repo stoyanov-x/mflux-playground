@@ -10,6 +10,7 @@ type Job = {
   id: string
   prompt: string
   status: string
+  progress: number
   resultUrl?: string
   error?: string
   createdAt: string
@@ -101,13 +102,14 @@ function InfoTooltip({ label, details }: { label: string; details: string[] }) {
   return (
     <span className="relative inline-flex items-center">
       <span
-        className="cursor-help text-gray-500 hover:text-gray-300 transition-colors text-sm ml-1"
+        className="cursor-pointer text-gray-400 hover:text-blue-400 transition-colors text-xs border border-gray-600 rounded-full w-4 h-4 inline-flex items-center justify-center ml-1.5 select-none"
         onMouseEnter={() => setShow(true)}
         onMouseLeave={() => setShow(false)}
         onClick={() => setShow(v => !v)}
-      >
-        ⓘ
-      </span>
+        role="button"
+        tabIndex={0}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setShow(v => !v) }}
+      >i</span>
       {show && (
         <>
           <div className="fixed inset-0 z-10 sm:hidden" onClick={() => setShow(false)} />
@@ -143,6 +145,7 @@ function GenerateTab({ onNavigate, health }: { onNavigate: (tab: Tab) => void; h
   const [resultId, setResultId] = useState<string | null>(null)
   const [resultImage, setResultImage] = useState<string | null>(null)
   const [resultError, setResultError] = useState<string | null>(null)
+  const [resultProgress, setResultProgress] = useState(0)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Fetch available LoRAs on mount
@@ -172,6 +175,7 @@ function GenerateTab({ onNavigate, health }: { onNavigate: (tab: Tab) => void; h
     setResultImage(null)
     setResultError(null)
     setResultId(null)
+    setResultProgress(0)
 
     try {
       const body: Record<string, unknown> = {
@@ -209,17 +213,22 @@ function GenerateTab({ onNavigate, health }: { onNavigate: (tab: Tab) => void; h
       try {
         const res = await fetch(`${INFERENCE_API}/jobs/${id}`)
         const data = await res.json()
+        setResultProgress(data.progress ?? 0)
         if (data.status === 'completed') {
+          setResultProgress(1)
           setResultImage(`${INFERENCE_API}/jobs/${id}/image?t=${Date.now()}`)
           if (pollRef.current) clearInterval(pollRef.current)
         } else if (data.status === 'failed') {
           setResultError(data.error || 'Generation failed')
           if (pollRef.current) clearInterval(pollRef.current)
+        } else if (data.status === 'cancelled') {
+          setResultError('Cancelled')
+          if (pollRef.current) clearInterval(pollRef.current)
         }
       } catch {
         if (pollRef.current) clearInterval(pollRef.current)
       }
-    }, 2000)
+    }, 1000)
   }
 
   const handleRefUpload = (file: File | null) => {
@@ -354,7 +363,17 @@ function GenerateTab({ onNavigate, health }: { onNavigate: (tab: Tab) => void; h
       )}
       {resultError && <p className="text-red-400 text-sm mt-2">Error: {resultError}</p>}
       {resultId && !resultImage && !resultError && (
-        <p className="text-gray-400 text-sm mt-2">Job {resultId.slice(0, 8)}… — {submitting ? 'queued' : 'running'}</p>
+        <div className="mt-4 space-y-2">
+          <p className="text-gray-400 text-sm">
+            Job {resultId.slice(0, 8)}… — {resultProgress > 0 ? `${Math.round(resultProgress * 100)}%` : 'queued'}
+          </p>
+          {resultProgress > 0 && (
+            <div className="w-full bg-gray-700 rounded-full h-2 overflow-hidden">
+              <div className="bg-blue-500 h-full rounded-full transition-all duration-500"
+                   style={{ width: `${Math.round(resultProgress * 100)}%` }} />
+            </div>
+          )}
+        </div>
       )}
     </form>
   )
@@ -585,13 +604,19 @@ function HistoryTab() {
 
   const statusBadge = (status: string) => {
     const colors: Record<string, string> = {
-      queued: 'bg-gray-500', running: 'bg-blue-500',
-      completed: 'bg-green-500', failed: 'bg-red-500',
+      queued: 'bg-gray-500',
+      downloading: 'bg-yellow-700',
+      running: 'bg-blue-500',
+      completed: 'bg-green-500',
+      failed: 'bg-red-500',
       cancelled: 'bg-yellow-600',
+    }
+    const labels: Record<string, string> = {
+      downloading: 'downloading model…',
     }
     return (
       <span className={`inline-block px-2 py-0.5 text-xs text-white rounded ${colors[status] || 'bg-gray-500'}`}>
-        {status}
+        {labels[status] || status}
       </span>
     )
   }
@@ -614,7 +639,10 @@ function HistoryTab() {
             </div>
             <div className="flex items-center gap-2 shrink-0">
               {statusBadge(job.status)}
-              {(job.status === 'queued' || job.status === 'running') && (
+              {job.progress > 0 && job.progress < 1 && ['downloading', 'running'].includes(job.status) && (
+                <span className="text-xs text-gray-400">{Math.round(job.progress * 100)}%</span>
+              )}
+              {(job.status === 'queued' || job.status === 'running' || job.status === 'downloading') && (
                 <button onClick={() => cancelJob(job.id)}
                   className="text-xs bg-yellow-700 hover:bg-yellow-600 text-white px-2 py-1 rounded transition-colors">
                   Cancel
@@ -632,6 +660,16 @@ function HistoryTab() {
             <div className="mt-3 text-xs text-gray-400 space-y-1 border-t border-gray-800 pt-2">
               <p><span className="text-gray-500">Job ID:</span> {job.id}</p>
               <p><span className="text-gray-500">Prompt:</span> {job.prompt || '(none)'}</p>
+              {job.status === 'downloading' && <p className="text-yellow-400">Downloading model…</p>}
+              {job.progress > 0 && job.progress < 1 && ['downloading', 'running'].includes(job.status) && (
+                <div className="space-y-1">
+                  <p><span className="text-gray-500">Progress:</span> {Math.round(job.progress * 100)}%</p>
+                  <div className="w-full bg-gray-700 rounded-full h-2 overflow-hidden">
+                    <div className="bg-blue-500 h-full rounded-full transition-all duration-500"
+                         style={{ width: `${Math.round(job.progress * 100)}%` }} />
+                  </div>
+                </div>
+              )}
               {job.error && <p className="text-red-400"><span className="text-gray-500">Error:</span> {job.error}</p>}
             </div>
           )}

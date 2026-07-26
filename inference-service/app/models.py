@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 
 class JobStatus(str, Enum):
     queued = "queued"
+    downloading = "downloading"
     running = "running"
     completed = "completed"
     failed = "failed"

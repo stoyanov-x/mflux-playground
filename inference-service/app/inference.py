@@ -186,6 +186,8 @@ class InferenceEngine:
         self._quantize = settings.quantize
         self._loaded_lora_paths: tuple[str, ...] = ()
         self._cancel_event = threading.Event()
+        self._progress: float = 0.0  # 0.0 → 1.0, updated during generation
+        self._num_steps: int = 0  # total steps for this generation
 
         # Apply resource limits once at init
         self._apply_resource_limits()
@@ -264,20 +266,23 @@ class InferenceEngine:
         logger.info("model_loaded", loras=self._loaded_lora_paths)
 
     def _register_cancel_callback(self) -> None:
-        """Register an in-loop callback that stops generation when cancel() is called."""
+        """Register an in-loop callback for cancel + progress tracking."""
 
         class _CancelChecker:
-            def __init__(self, event: threading.Event):
+            def __init__(self, event: threading.Event, engine: "InferenceEngine"):
                 self._event = event
+                self._engine = engine
 
-            def call_in_loop(self, t: int, **kwargs) -> None:
+            def call_in_loop(self, t: int, num_inference_steps: int, **kwargs) -> None:
+                # t is current step (0-indexed), num_inference_steps is total
+                self._engine._progress = (t + 1) / num_inference_steps
                 if self._event.is_set():
                     from mflux.utils.exceptions import StopImageGenerationException
 
                     raise StopImageGenerationException("Cancelled by user")
 
         self._cancel_event.clear()
-        self._model.callbacks.register(_CancelChecker(self._cancel_event))
+        self._model.callbacks.register(_CancelChecker(self._cancel_event, self))
 
     def unload_model(self) -> None:
         self._model = None
@@ -332,6 +337,10 @@ class InferenceEngine:
             ref.save(temp_file, format="PNG")
             image_path = Path(temp_file.name)
 
+        # Reset progress for the new generation
+        self._progress = 0.0
+        self._num_steps = steps
+
         start = time.perf_counter()
 
         try:
@@ -376,3 +385,8 @@ class InferenceEngine:
     @property
     def is_loaded(self) -> bool:
         return self._model is not None
+
+    @property
+    def progress(self) -> float:
+        """Current generation progress (0.0 → 1.0)."""
+        return self._progress
