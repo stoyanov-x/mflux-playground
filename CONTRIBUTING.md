@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for your interest in contributing to mflux-experiment!
+Thanks for your interest in contributing to mflux-playground!
 
 ## Getting Started
 
