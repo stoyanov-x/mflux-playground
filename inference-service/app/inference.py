@@ -273,9 +273,10 @@ class InferenceEngine:
                 self._event = event
                 self._engine = engine
 
-            def call_in_loop(self, t: int, num_inference_steps: int, **kwargs) -> None:
-                # t is current step (0-indexed), num_inference_steps is total
-                self._engine._progress = (t + 1) / num_inference_steps
+            def call_in_loop(self, t: int, **kwargs) -> None:
+                # t is current step (0-indexed); total steps from engine state
+                total = self._engine._num_steps
+                self._engine._progress = (t + 1) / total if total > 0 else 0.0
                 if self._event.is_set():
                     from mflux.utils.exceptions import StopImageGenerationException
 

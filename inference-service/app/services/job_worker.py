@@ -116,6 +116,9 @@ class JobWorker:
 
         self._store.update_job(job_id, status=JobStatus.running.value, progress=0.0)
 
+        # Reset progress on the engine *before* the poller starts
+        self._engine._progress = 0.0
+
         # Start a daemon thread to poll progress during generation
         def _poll_progress() -> None:
             while True:
