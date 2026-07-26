@@ -125,7 +125,11 @@ wait_for_port "localhost" 5173 "Frontend" 30
 
 info "Starting inference service (native — MLX + Metal)…"
 cd "$SCRIPT_DIR/inference-service"
-uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level info &
+# Unset any stray VIRTUAL_ENV to avoid uv confusion with stale activated venvs
+unset VIRTUAL_ENV
+# Use python -m uvicorn to guarantee the venv's module resolution is used,
+# avoiding accidental fallback to homebrew/system uvicorn on PATH.
+uv run python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level info &
 INFERENCE_PID=$!
 cd "$SCRIPT_DIR"
 
