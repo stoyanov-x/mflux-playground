@@ -64,11 +64,33 @@ LORA_TARGETS_FLUX2 = [
     },
 ]
 
-# Z-Image Turbo (from src/mflux/models/z_image/README.md example)
+# Z-Image Turbo (from official mflux _example/train.json)
 LORA_TARGETS_ZIMAGE = [
-    {"module_path": "layers.{block}.attention.to_q", "blocks": {"start": 15, "end": 30}, "rank": 8},
-    {"module_path": "layers.{block}.attention.to_k", "blocks": {"start": 15, "end": 30}, "rank": 8},
-    {"module_path": "layers.{block}.attention.to_v", "blocks": {"start": 15, "end": 30}, "rank": 8},
+    {"module_path": "layers.{block}.attention.to_q", "blocks": {"start": 0, "end": 30}, "rank": 16},
+    {"module_path": "layers.{block}.attention.to_k", "blocks": {"start": 0, "end": 30}, "rank": 16},
+    {"module_path": "layers.{block}.attention.to_v", "blocks": {"start": 0, "end": 30}, "rank": 16},
+    {
+        "module_path": "layers.{block}.attention.to_out.0",
+        "blocks": {"start": 0, "end": 30},
+        "rank": 16,
+    },
+    {
+        "module_path": "layers.{block}.feed_forward.w1",
+        "blocks": {"start": 0, "end": 30},
+        "rank": 16,
+    },
+    {
+        "module_path": "layers.{block}.feed_forward.w2",
+        "blocks": {"start": 0, "end": 30},
+        "rank": 16,
+    },
+    {
+        "module_path": "layers.{block}.feed_forward.w3",
+        "blocks": {"start": 0, "end": 30},
+        "rank": 16,
+    },
+    {"module_path": "cap_embedder.1", "rank": 16},
+    {"module_path": "all_final_layer.2-1.linear", "rank": 16},
 ]
 
 # ERNIE-Image (from src/mflux/models/common/training/_example/train_ernie_image.json)
