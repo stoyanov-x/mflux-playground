@@ -146,6 +146,7 @@ function GenerateTab({ onNavigate, health }: { onNavigate: (tab: Tab) => void; h
   const [resultImage, setResultImage] = useState<string | null>(null)
   const [resultError, setResultError] = useState<string | null>(null)
   const [resultProgress, setResultProgress] = useState(0)
+  const [resultStatus, setResultStatus] = useState<string | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Fetch available LoRAs on mount
@@ -176,6 +177,7 @@ function GenerateTab({ onNavigate, health }: { onNavigate: (tab: Tab) => void; h
     setResultError(null)
     setResultId(null)
     setResultProgress(0)
+    setResultStatus(null)
 
     try {
       const body: Record<string, unknown> = {
@@ -214,6 +216,7 @@ function GenerateTab({ onNavigate, health }: { onNavigate: (tab: Tab) => void; h
         const res = await fetch(`${INFERENCE_API}/jobs/${id}`)
         const data = await res.json()
         setResultProgress(data.progress ?? 0)
+        setResultStatus(data.status)
         if (data.status === 'completed') {
           setResultProgress(1)
           setResultImage(`${INFERENCE_API}/jobs/${id}/image?t=${Date.now()}`)
@@ -365,7 +368,12 @@ function GenerateTab({ onNavigate, health }: { onNavigate: (tab: Tab) => void; h
       {resultId && !resultImage && !resultError && (
         <div className="mt-4 space-y-2">
           <p className="text-gray-400 text-sm">
-            Job {resultId.slice(0, 8)}… — {Math.round(resultProgress * 100)}%
+            Job {resultId.slice(0, 8)}…
+            {resultStatus === 'downloading'
+              ? ' — downloading model…'
+              : resultStatus === 'queued'
+                ? ' — queued'
+                : ` — ${Math.round(resultProgress * 100)}%`}
           </p>
           <div className="w-full bg-gray-700 rounded-full h-2 overflow-hidden">
             <div className="bg-blue-500 h-full rounded-full transition-all duration-500"
