@@ -152,22 +152,41 @@ class JobStore:
     # ── Disk-backed images ───────────────────────────────────
 
     def set_image(self, job_id: str, image_bytes: bytes) -> str:
-        """Save image bytes to disk and return the file path."""
+        """Save image bytes to disk and return a portable relative path."""
         image_path = _IMAGES_DIR / f"{job_id}.png"
         image_path.write_bytes(image_bytes)
-        return str(image_path)
+        # Store only the filename so the path stays valid if the project moves.
+        return image_path.name  # e.g. "uuid.png"
 
     def get_image_path(self, job_id: str) -> str | None:
-        """Return the on-disk path for a completed job's image, or None."""
+        """Return the on-disk path for a completed job's image, or None.
+
+        Resolves stored paths dynamically so images are found even when
+        the project directory has moved (old absolute paths stored by
+        earlier versions of the code still work via filename fallback).
+        """
         with self._connect() as conn:
             row = conn.execute(
                 "SELECT image_path FROM jobs WHERE job_id = ?",
                 (job_id,),
             ).fetchone()
-            path = row["image_path"] if row else None
-            if path and Path(path).exists():
-                return path
-            return None
+            stored = row["image_path"] if row else None
+            if not stored:
+                return None
+
+            candidate = Path(stored)
+            if candidate.is_absolute():
+                # Old-style absolute path — check if it still exists
+                if candidate.exists():
+                    return str(candidate)
+                # Fall back to the filename in the current images directory
+                candidate = _IMAGES_DIR / candidate.name
+
+            else:
+                # New-style relative path (just the filename)
+                candidate = _IMAGES_DIR / stored
+
+            return str(candidate) if candidate.exists() else None
 
 
 # ── Dependency ──────────────────────────────────────────────
