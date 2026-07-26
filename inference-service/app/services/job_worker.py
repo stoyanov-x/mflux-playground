@@ -190,7 +190,7 @@ class JobWorker:
             job_id,
             status=JobStatus.completed.value,
             progress=1.0,
-            result_url=f"/api/v1/lora/list",
+            result_url="/api/v1/lora/list",
             seed_used=None,
             elapsed_seconds=None,
         )

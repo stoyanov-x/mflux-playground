@@ -12,12 +12,12 @@ the `InferenceEngine` interface.
 from __future__ import annotations
 
 import base64
+import contextlib
 import io
 import tempfile
 import threading
 import time
 from pathlib import Path
-from typing import Optional
 
 import structlog
 from PIL import Image
@@ -150,7 +150,7 @@ def _load_model_instance(model_alias: str, quantize: int | None, lora_paths: lis
         from mflux.models.fibo_vlm.model.fibo_vlm import FiboVLM
 
         return FiboVLM(
-            model_id=None,
+            model_id=None,  # type: ignore[reportArgumentType]
             model_path=None,
             quantize=quantize,
         ), model_config
@@ -211,10 +211,8 @@ class InferenceEngine:
         import mlx.core as mx
 
         # Lower CPU scheduling priority so the UI stays responsive
-        try:
+        with contextlib.suppress(Exception):
             _os.nice(settings.nice_level)
-        except Exception:
-            pass
 
         limit_gb = settings.mlx_cache_limit_gb or 8.0
 
@@ -242,7 +240,7 @@ class InferenceEngine:
 
     # ── Lifecycle ────────────────────────────────────────────
 
-    def load_model(self, lora_paths: Optional[list[str]] = None) -> None:
+    def load_model(self, lora_paths: list[str] | None = None) -> None:
         """Ensure the model is loaded with the given LoRA paths."""
         lora_tuple = tuple(lora_paths or [])
         if self._model is not None and self._loaded_lora_paths == lora_tuple:
@@ -269,11 +267,11 @@ class InferenceEngine:
         """Register an in-loop callback for cancel + progress tracking."""
 
         class _CancelChecker:
-            def __init__(self, event: threading.Event, engine: "InferenceEngine"):
+            def __init__(self, event: threading.Event, engine: InferenceEngine):
                 self._event = event
                 self._engine = engine
 
-            def call_in_loop(self, t: int, **kwargs) -> None:
+            def call_in_loop(self, t: int, **_kwargs) -> None:
                 # t is current step index (0-based); show progress as steps completed / total
                 total = self._engine._num_steps
                 self._engine._progress = (t + 1) / total if total > 0 else 0.0
@@ -296,15 +294,15 @@ class InferenceEngine:
         self,
         prompt: str,
         *,
-        negative_prompt: Optional[str] = None,
-        lora_paths: Optional[list[str]] = None,
-        lora_scales: Optional[list[float]] = None,
-        reference_image_b64: Optional[str] = None,
+        negative_prompt: str | None = None,
+        lora_paths: list[str] | None = None,
+        lora_scales: list[float] | None = None,  # noqa: ARG002
+        reference_image_b64: str | None = None,
         denoise_strength: float = 0.4,
-        num_inference_steps: Optional[int] = None,
-        height: Optional[int] = None,
-        width: Optional[int] = None,
-        seed: Optional[int] = None,
+        num_inference_steps: int | None = None,
+        height: int | None = None,
+        width: int | None = None,
+        seed: int | None = None,
         guidance_scale: float = 3.5,
     ) -> tuple[Image.Image, int, float]:
         """
@@ -334,9 +332,9 @@ class InferenceEngine:
         if reference_image_b64 is not None:
             raw = base64.b64decode(reference_image_b64)
             ref = Image.open(io.BytesIO(raw)).convert("RGB")
-            temp_file = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
-            ref.save(temp_file, format="PNG")
-            image_path = Path(temp_file.name)
+            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as temp_file:
+                ref.save(temp_file, format="PNG")
+                image_path = Path(temp_file.name)
 
         # Reset progress for the new generation
         self._progress = 0.0
@@ -362,7 +360,6 @@ class InferenceEngine:
             result = self._model.generate_image(**kwargs)
         finally:
             if temp_file is not None:
-                temp_file.close()
                 Path(temp_file.name).unlink(missing_ok=True)
 
         elapsed = time.perf_counter() - start

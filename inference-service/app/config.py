@@ -5,8 +5,6 @@ This keeps the inference contract portable — swap the backend without
 changing any calling code.
 """
 
-from typing import Optional
-
 from pydantic_settings import BaseSettings
 
 
@@ -24,14 +22,14 @@ class InferenceSettings(BaseSettings):
     #   "z-image-turbo"  — fast, good quality, supports training
     #   "flux2-klein-9b" — higher quality, supports training
     model_alias: str = "flux2-klein-4b"
-    base_model: Optional[str] = None
+    base_model: str | None = None
     default_num_steps: int = 25
     default_height: int = 1024
     default_width: int = 1024
 
     # ── Quantisation ─────────────────────────────────────────
     # Set to 4 or 8 to enable on-the-fly quantisation.
-    quantize: Optional[int] = 8
+    quantize: int | None = 8
 
     # ── LoRA ─────────────────────────────────────────────────
     # Comma-separated paths to default LoRA weight files.
@@ -42,7 +40,7 @@ class InferenceSettings(BaseSettings):
 
     # ── Resource limits (prevents Mac from freezing) ─────────
     # Limit MLX GPU memory cache in GB (e.g. 8, 16). None = unlimited.
-    mlx_cache_limit_gb: Optional[float] = 6.0
+    mlx_cache_limit_gb: float | None = 6.0
     # Low RAM mode: offloads training data to disk (saves ~10 GB at 1024px).
     low_ram: bool = True
     # CPU nice value (higher = lower priority, 0=normal, 10=low, 19=idle).

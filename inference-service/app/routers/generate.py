@@ -118,25 +118,24 @@ async def submit_training(
 ) -> JobResponse:
     """Submit a LoRA training job.
 
-    Accepts 3–100 base64-encoded images. 10–30 is the ideal range for
+    Accepts 3-100 base64-encoded images. 10-30 is the ideal range for
     a style LoRA. Training runs asynchronously — poll ``GET /jobs/{id}``
     for completion.
     """
     if len(req.images) < 3:
-        raise HTTPException(
-            status_code=422, detail="At least 3 training images are required"
-        )
+        raise HTTPException(status_code=422, detail="At least 3 training images are required")
     if req.prompts and len(req.prompts) != len(req.images):
         raise HTTPException(
             status_code=422,
-            detail=f"Number of prompts ({len(req.prompts)}) must match number of images ({len(req.images)})",
+            detail=(
+                f"Number of prompts ({len(req.prompts)}) must match "
+                f"number of images ({len(req.images)})"
+            ),
         )
 
     job_id = str(uuid.uuid4())
     # Tag as training job so the worker handles it differently
-    await asyncio.to_thread(
-        store.create_job, job_id, {"type": "train", **req.model_dump()}
-    )
+    await asyncio.to_thread(store.create_job, job_id, {"type": "train", **req.model_dump()})
     worker.enqueue(job_id)
     return JobResponse(job_id=job_id, status=JobStatus.queued)
 

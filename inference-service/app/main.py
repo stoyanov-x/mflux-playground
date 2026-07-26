@@ -72,5 +72,6 @@ if __name__ == "__main__":
         port=settings.port,
         log_level=settings.log_level,
         reload=True,
-        limit_max_request_body_size=settings.max_request_body_size_mb * 1024 * 1024,
+        # uvicorn removed this parameter; enforced via middleware instead
+        # limit_max_request_body_size=settings.max_request_body_size_mb * 1024 * 1024,
     )

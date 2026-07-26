@@ -6,10 +6,10 @@ on disk with a path reference in the database.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import sqlite3
 from pathlib import Path
-from typing import Optional
 
 from app.config import settings
 from app.models import JobStatus
@@ -64,10 +64,8 @@ class JobStore:
                 DROP TABLE IF EXISTS images;
             """)
             # Migration: add image_path column if missing (idempotent)
-            try:
+            with contextlib.suppress(sqlite3.OperationalError):
                 conn.execute("ALTER TABLE jobs ADD COLUMN image_path TEXT")
-            except sqlite3.OperationalError:
-                pass  # column already exists
 
     # ── CRUD ─────────────────────────────────────────────────
 
@@ -89,7 +87,7 @@ class JobStore:
             )
         return record
 
-    def get_job(self, job_id: str) -> Optional[dict]:
+    def get_job(self, job_id: str) -> dict | None:
         with self._connect() as conn:
             row = conn.execute(
                 """SELECT job_id, status, progress, result_url, image_path, error,
@@ -110,7 +108,7 @@ class JobStore:
                 values,
             )
 
-    def get_params(self, job_id: str) -> Optional[dict]:
+    def get_params(self, job_id: str) -> dict | None:
         """Retrieve the original request params stored at creation."""
         with self._connect() as conn:
             row = conn.execute(
@@ -135,9 +133,7 @@ class JobStore:
                 job = dict(r)
                 # Extract prompt from params_json
                 params = json.loads(job.pop("params_json") or "{}")
-                job["prompt"] = (
-                    params.get("prompt") or params.get("name") or "[training job]"
-                )
+                job["prompt"] = params.get("prompt") or params.get("name") or "[training job]"
                 result.append(job)
             return result
 
@@ -161,7 +157,7 @@ class JobStore:
         image_path.write_bytes(image_bytes)
         return str(image_path)
 
-    def get_image_path(self, job_id: str) -> Optional[str]:
+    def get_image_path(self, job_id: str) -> str | None:
         """Return the on-disk path for a completed job's image, or None."""
         with self._connect() as conn:
             row = conn.execute(

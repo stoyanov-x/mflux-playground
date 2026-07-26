@@ -8,6 +8,7 @@ at a time, same as generation).
 from __future__ import annotations
 
 import base64
+import contextlib
 import io
 import json
 import os
@@ -201,10 +202,8 @@ def run_training(
     Returns the path to the trained ``.safetensors`` file.
     """
     # 1. Set low CPU priority so the Mac stays usable during training
-    try:
+    with contextlib.suppress(Exception):
         os.nice(settings.nice_level)
-    except Exception:
-        pass
 
     # 2. Resolve params
     model = model_alias or settings.model_alias
@@ -271,7 +270,7 @@ def run_training(
     from mflux.models.common.training.runner import TrainingRunner
 
     try:
-        adapter, spec = TrainingRunner.train(config_path=str(config_path), resume_path=None)
+        _adapter, _spec = TrainingRunner.train(config_path=str(config_path), resume_path=None)
 
         # 6. Find the latest checkpoint and extract the LoRA safetensors
         checkpoints_dir = job_dir / "checkpoints"
