@@ -376,8 +376,13 @@ function GenerateTab({ onNavigate, health }: { onNavigate: (tab: Tab) => void; h
                 : ` — ${Math.round(resultProgress * 100)}%`}
           </p>
           <div className="w-full bg-gray-700 rounded-full h-2 overflow-hidden">
-            <div className="bg-blue-500 h-full rounded-full transition-all duration-500"
-                 style={{ width: `${Math.round(resultProgress * 100)}%` }} />
+            {resultStatus === 'downloading' ? (
+              <div className="bg-blue-500 h-full rounded-full animate-pulse"
+                   style={{ width: '30%' }} />
+            ) : (
+              <div className="bg-blue-500 h-full rounded-full transition-all duration-500"
+                   style={{ width: `${Math.round(resultProgress * 100)}%` }} />
+            )}
           </div>
         </div>
       )}
