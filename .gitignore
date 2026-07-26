@@ -28,8 +28,10 @@ generated_images/
 **/generated_images/
 
 # SQLite databases (created at runtime)
-data/
-**/data/
+# NOTE: /data/ (leading slash) anchors to repo root ONLY — otherwise on macOS
+# case-insensitive fs this will accidentally ignore web-api/Data/ (C# source).
+/data/
+inference-service/data/
 
 # Training outputs
 training/
